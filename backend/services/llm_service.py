@@ -16,41 +16,23 @@ try:
 except ImportError:
     PYPDF_AVAILABLE = False
 
-DATABASE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "database")
+import psycopg2
+from core.config import settings
 
 def get_database_context() -> str:
     context = ""
-    if not os.path.exists(DATABASE_DIR):
-        return context
-
-    for filename in os.listdir(DATABASE_DIR):
-        file_path = os.path.join(DATABASE_DIR, filename)
-        if not os.path.isfile(file_path):
-            continue
-        
-        extracted_text = f"\n--- Content of {filename} ---\n"
-        
-        try:
-            if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-                if TESSERACT_AVAILABLE:
-                    image = Image.open(file_path)
-                    extracted_text += pytesseract.image_to_string(image)
-                else:
-                    extracted_text += "[Tesseract not available to read image]"
-            elif filename.lower().endswith('.pdf'):
-                if PYPDF_AVAILABLE:
-                    pdf_reader = pypdf.PdfReader(file_path)
-                    for page in pdf_reader.pages:
-                        extracted_text += (page.extract_text() or "") + "\n"
-                else:
-                    extracted_text += "[pypdf not available to read PDF]"
-            else:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    extracted_text += f.read()
-        except Exception as e:
-            extracted_text += f"[Error reading file: {e}]"
-            
-        context += extracted_text + "\n"
+    try:
+        conn = psycopg2.connect(settings.DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT filename, content FROM documents")
+        rows = cur.fetchall()
+        for filename, content in rows:
+            context += f"\n--- Content of {filename} ---\n{content}\n"
+        cur.close()
+        conn.close()
+    except Exception as e:
+        context = f"[Database error: {e}]"
+        print(f"Error fetching database context: {e}")
         
     return context
 
