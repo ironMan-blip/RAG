@@ -27,6 +27,9 @@ async def chat_endpoint(req: ChatRequest):
 
 import hashlib
 
+import psycopg2
+from core.config import settings
+
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     try:
@@ -83,6 +86,23 @@ async def upload_file(file: UploadFile = File(...)):
             except Exception as e:
                 print(f"Error extracting text from PDF: {e}")
                 extracted_text = f"[PDF Parsing Failed: {e}]"
+
+        # Insert into database
+        if extracted_text.strip():
+            try:
+                conn = psycopg2.connect(settings.DATABASE_URL)
+                cur = conn.cursor()
+                cur.execute(
+                    "INSERT INTO documents (filename, content) VALUES (%s, %s) ON CONFLICT (filename) DO UPDATE SET content = EXCLUDED.content",
+                    (file.filename, extracted_text.strip())
+                )
+                conn.commit()
+                cur.close()
+                conn.close()
+                upload_message += " and saved to database"
+            except Exception as db_err:
+                print(f"Database insertion error: {db_err}")
+                upload_message += f" but failed to save to DB: {db_err}"
                 
         return {
             "filename": file.filename, 
