@@ -39,15 +39,30 @@ async def upload_file(file: UploadFile = File(...)):
         file_hash = hashlib.sha256(content).hexdigest()
         file_exists = False
         
-        for existing_filename in os.listdir("uploads"):
-            existing_path = os.path.join("uploads", existing_filename)
-            if os.path.isfile(existing_path):
-                with open(existing_path, "rb") as f:
-                    if hashlib.sha256(f.read()).hexdigest() == file_hash:
-                        file_exists = True
-                        break
+        # Check if hash already exists in DB
+        try:
+            conn = psycopg2.connect(settings.DATABASE_URL)
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM documents WHERE file_hash = %s", (file_hash,))
+            existing_doc = cur.fetchone()
+            if existing_doc:
+                file_exists = True
+            cur.close()
+            conn.close()
+        except Exception as db_err:
+            print(f"Error checking existing hash in DB: {db_err}")
+            # Fallback to local disk check if DB fails
+            for existing_filename in os.listdir("uploads"):
+                existing_path = os.path.join("uploads", existing_filename)
+                if os.path.isfile(existing_path):
+                    with open(existing_path, "rb") as f:
+                        if hashlib.sha256(f.read()).hexdigest() == file_hash:
+                            file_exists = True
+                            break
         
         file_path = f"uploads/{file.filename}"
+        file_url = f"local://{os.path.abspath(file_path)}"
+        
         if not file_exists:
             with open(file_path, "wb") as buffer:
                 buffer.write(content)
@@ -93,8 +108,8 @@ async def upload_file(file: UploadFile = File(...)):
                 conn = psycopg2.connect(settings.DATABASE_URL)
                 cur = conn.cursor()
                 cur.execute(
-                    "INSERT INTO documents (filename, content) VALUES (%s, %s) ON CONFLICT (filename) DO UPDATE SET content = EXCLUDED.content",
-                    (file.filename, extracted_text.strip())
+                    "INSERT INTO documents (filename, content, file_hash, file_url) VALUES (%s, %s, %s, %s) ON CONFLICT (filename) DO UPDATE SET content = EXCLUDED.content, file_hash = EXCLUDED.file_hash, file_url = EXCLUDED.file_url",
+                    (file.filename, extracted_text.strip(), file_hash, file_url)
                 )
                 conn.commit()
                 cur.close()

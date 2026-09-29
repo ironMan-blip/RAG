@@ -52,7 +52,9 @@ def init_db():
             CREATE TABLE IF NOT EXISTS documents (
                 id SERIAL PRIMARY KEY,
                 filename VARCHAR(255) UNIQUE NOT NULL,
-                content TEXT NOT NULL
+                content TEXT NOT NULL,
+                file_hash VARCHAR(255),
+                file_url TEXT
             )
         ''')
         
@@ -66,10 +68,17 @@ def init_db():
                 print(f"Processing {filename}...")
                 content = extract_text_from_file(file_path, filename)
                 
+                # Compute hash of the file
+                import hashlib
+                with open(file_path, 'rb') as f:
+                    file_hash = hashlib.sha256(f.read()).hexdigest()
+                
+                file_url = f"local://{file_path}"
+                
                 try:
                     cur.execute(
-                        "INSERT INTO documents (filename, content) VALUES (%s, %s) ON CONFLICT (filename) DO UPDATE SET content = EXCLUDED.content",
-                        (filename, content)
+                        "INSERT INTO documents (filename, content, file_hash, file_url) VALUES (%s, %s, %s, %s) ON CONFLICT (filename) DO UPDATE SET content = EXCLUDED.content, file_hash = EXCLUDED.file_hash, file_url = EXCLUDED.file_url",
+                        (filename, content, file_hash, file_url)
                     )
                     print(f"Inserted/Updated {filename}")
                 except Exception as e:
