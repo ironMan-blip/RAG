@@ -1,4 +1,5 @@
 from openai import OpenAI
+from langsmith import traceable, wrappers
 from core.config import settings
 from core.database import get_db_connection
 
@@ -9,6 +10,7 @@ except ImportError:
     embedder = None
     print("sentence_transformers not installed.")
 
+@traceable
 def get_database_context(query: str, attached_filename: str = None) -> str:
     context = ""
     try:
@@ -58,18 +60,19 @@ def get_database_context(query: str, attached_filename: str = None) -> str:
     return context
 
 # Initialize the OpenAI client pointing to OpenRouter
-client = OpenAI(
+client = wrappers.wrap_openai(OpenAI(
   base_url=settings.OPENROUTER_BASE_URL,
   api_key=settings.OPENROUTER_API_KEY,
-)
+))
 
+@traceable
 def get_chat_completion(message: str, attached_filename: str = None) -> str:
     """Sends a message to the AI and retrieves the reply, including database context."""
     db_context = get_database_context(message, attached_filename)
     
     system_prompt = "You are a very helpful AI assistant. Use the provided database context to answer the user's query."
     if db_context:
-        system_prompt += f"\n\nDATABASE CONTEXT:\n{db_context}"
+        system_prompt += f"\n\nADDITIONAL DOCUMENTS/CONTEXT:\n{db_context}"
 
     response = client.chat.completions.create(
         model=settings.LLM_MODEL,

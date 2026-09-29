@@ -52,3 +52,4 @@ typing_extensions==4.16.0
 urllib3==2.6.3
 uvicorn==0.39.0
 langchain-text-splitters==0.3.6
+langsmith==0.4.37
