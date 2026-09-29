@@ -39,27 +39,3 @@ def delete_chunks_for_document(doc_id: int):
         with conn.cursor() as cur:
             cur.execute("DELETE FROM chunks WHERE doc_id = %s", (doc_id,))
         conn.commit()
-
-def process_all_existing_documents():
-    """Convert all existing documents to chunks."""
-    if not embedder or not text_splitter:
-        print("Dependencies missing.")
-        return
-        
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT id, content FROM documents WHERE content IS NOT NULL AND content != ''")
-            docs = cur.fetchall()
-            
-            # Clear existing chunks first to avoid duplicates
-            cur.execute("TRUNCATE TABLE chunks RESTART IDENTITY CASCADE;")
-            
-            for doc_id, text in docs:
-                chunks = text_splitter.split_text(text)
-                for chunk in chunks:
-                    embedding = embedder.encode(chunk).tolist()
-                    cur.execute(
-                        "INSERT INTO chunks (doc_id, chunk_text, chunk_embedding) VALUES (%s, %s, %s)",
-                        (doc_id, chunk, embedding)
-                    )
-        conn.commit()

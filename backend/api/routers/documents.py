@@ -2,8 +2,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 from services.document_service import (
     process_and_save_document,
     get_all_documents as fetch_all_documents,
-    delete_document as remove_doc,
-    get_document_content as fetch_doc_content
+    delete_document as remove_doc
 )
 
 router = APIRouter()
@@ -38,16 +37,3 @@ async def delete_document(doc_id: int):
     except Exception as e:
         print(f"Failed to delete document: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete document")
-
-@router.get("/documents/{doc_id}/content")
-async def get_document_content(doc_id: int):
-    try:
-        content_data = fetch_doc_content(doc_id)
-        if not content_data:
-            raise HTTPException(status_code=404, detail="Document not found")
-        return content_data
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Failed to fetch document content: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch document content")
