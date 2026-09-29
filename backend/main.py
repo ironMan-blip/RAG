@@ -1,20 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import router as chat_router
+
+from api.routers.chat import router as chat_router
+from api.routers.documents import router as documents_router
+
 
 app = FastAPI(title="RAG AI Chat Backend")
 
-# Enable CORS to allow the frontend to communicate with this backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins, adjust for production if needed
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include API routes
-app.include_router(chat_router, prefix="/api")
+app.include_router(chat_router, prefix="/api", tags=["chat"])
+app.include_router(documents_router, prefix="/api", tags=["documents"])
 
-# Entry point instructions:
-# Run with: uvicorn main:app --reload --port 8000

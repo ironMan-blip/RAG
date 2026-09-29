@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X } from 'lucide-react';
+import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Database } from 'lucide-react';
 import './App.css';
+import DatabaseExplorer from './DatabaseExplorer';
+
 
 const BACKEND_URL = 'http://localhost:8000/api/chat';
 const UPLOAD_URL = 'http://localhost:8000/api/upload';
+const DOCUMENTS_URL = 'http://localhost:8000/api/documents';
 
 function App() {
   const [messages, setMessages] = useState([
@@ -12,6 +15,8 @@ function App() {
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [showDbModal, setShowDbModal] = useState(false);
+
   const chatBoxRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -39,20 +44,23 @@ function App() {
     if (!text && !selectedFile) return;
 
     let finalMessage = text;
-    let fileToUpload = selectedFile;
 
     // Display user message with attachment immediately
     let displayMessage = text;
-    if (fileToUpload) {
-      displayMessage = text ? `[Attached File: ${fileToUpload.name}]\n\n${text}` : `[Attached File: ${fileToUpload.name}]`;
+    if (selectedFile) {
+      displayMessage = text ? `[Attached File: ${selectedFile.name}]\n\n${text}` : `[Attached File: ${selectedFile.name}]`;
     }
 
     setMessages(prev => [...prev, { text: displayMessage, sender: 'user' }]);
     setInputValue("");
+    
+    const fileToUpload = selectedFile;
+    
     setSelectedFile(null); // Clear selected file right away
     setIsLoading(true);
 
     try {
+      let attachedFilename = null;
       if (fileToUpload) {
         // Upload the file first
         const formData = new FormData();
@@ -66,13 +74,7 @@ function App() {
         if (!uploadRes.ok) throw new Error("File upload failed");
         const uploadData = await uploadRes.json();
         
-        // Append actual filename and extracted text from server to the prompt
-        let fileContext = `[Attached File: ${uploadData.filename}]`;
-        if (uploadData.extracted_text) {
-          fileContext += `\n[File Content: ${uploadData.extracted_text}]`;
-        }
-        
-        finalMessage = text ? `${fileContext}\n\n${text}` : fileContext;
+        attachedFilename = uploadData.filename;
       }
 
       const response = await fetch(BACKEND_URL, {
@@ -80,7 +82,10 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: finalMessage || "File attached." })
+        body: JSON.stringify({ 
+          message: text || "",
+          attached_filename: attachedFilename 
+        })
       });
 
       if (!response.ok) {
@@ -116,13 +121,22 @@ function App() {
       <div className="chat-container">
         <header className="chat-header">
           <div className="header-icon">
-            <Sparkles size={24} color="#fff" />
+            <Sparkles size={24} color="#111111" />
           </div>
           <div className="header-info">
             <h2>AI Assistant</h2>
             <span className="status-indicator">
               <span className="dot"></span> Online
             </span>
+          </div>
+          <div className="header-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+            <button 
+              onClick={() => setShowDbModal(true)}
+              title="View Database"
+            >
+              <Database size={16} />
+              Database
+            </button>
           </div>
         </header>
 
@@ -156,6 +170,12 @@ function App() {
           )}
         </main>
 
+        {showDbModal && (
+          <DatabaseExplorer onClose={() => setShowDbModal(false)} documentsUrl={DOCUMENTS_URL} />
+        )}
+
+
+
         <footer className="chat-input-area">
           {selectedFile && (
             <div className="file-attachment-preview">
@@ -168,20 +188,23 @@ function App() {
               </button>
             </div>
           )}
-          <div className="input-wrapper">
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              style={{ display: 'none' }} 
-              onChange={handleFileSelect}
-            />
-            <button 
-              className="upload-btn" 
-              onClick={() => fileInputRef.current?.click()}
-              title="Attach File"
-            >
-              <Paperclip size={18} />
-            </button>
+          <div className="input-wrapper" >
+            <div className="file-actions" >
+              <input style={{ display: "none" }} 
+                type="file" 
+                ref={fileInputRef} 
+                 
+                onChange={handleFileSelect}
+              />
+              <button 
+                className="upload-btn" 
+                onClick={() => fileInputRef.current?.click()}
+                title="Upload New File"
+              >
+                <Paperclip size={18} />
+              </button>
+            </div>
+
             <textarea 
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}

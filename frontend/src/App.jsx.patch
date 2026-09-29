@@ -1,0 +1,54 @@
+--- frontend/src/App.jsx
++++ frontend/src/App.jsx
+@@ -1,8 +1,9 @@
+ import { useState, useRef, useEffect } from 'react';
+-import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Database } from 'lucide-react';
++import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Database, Layers } from 'lucide-react';
+ import './App.css';
+ import DatabaseExplorer from './DatabaseExplorer';
++import ChunksExplorer from './ChunksExplorer';
+ 
+ const BACKEND_URL = 'http://localhost:8000/api/chat';
+ const UPLOAD_URL = 'http://localhost:8000/api/upload';
+@@ -14,6 +15,7 @@
+   const [isLoading, setIsLoading] = useState(false);
+   const [selectedFile, setSelectedFile] = useState(null);
+   const [showDbModal, setShowDbModal] = useState(false);
++  const [showChunksModal, setShowChunksModal] = useState(false);
+   const chatBoxRef = useRef(null);
+   const fileInputRef = useRef(null);
+ 
+@@ -107,13 +109,21 @@
+             <span className="status-indicator">
+               <span className="dot"></span> Online
+             </span>
+           </div>
+-          <div className="header-actions" style={{ marginLeft: 'auto' }}>
++          <div className="header-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
++            <button 
++              onClick={() => setShowChunksModal(true)}
++              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
++              title="View Chunks"
++            >
++              <Layers size={16} />
++              Chunks
++            </button>
+             <button 
+               onClick={() => setShowDbModal(true)}
+               style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
+               title="View Database"
+             >
+               <Database size={16} />
+               Database
+             </button>
+@@ -147,6 +157,10 @@
+         {showDbModal && (
+           <DatabaseExplorer onClose={() => setShowDbModal(false)} documentsUrl={DOCUMENTS_URL} />
+         )}
++        
++        {showChunksModal && (
++          <ChunksExplorer onClose={() => setShowChunksModal(false)} />
++        )}
+ 
+         <footer className="chat-input-area">
+           {selectedFile && (
