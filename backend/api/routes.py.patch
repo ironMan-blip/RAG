@@ -1,0 +1,20 @@
+--- routes.py
++++ routes.py
+@@ -148,3 +148,16 @@
+         raise HTTPException(status_code=500, detail="Failed to fetch chunks")
++
++@router.get("/documents")
++async def get_all_documents():
++    try:
++        conn = psycopg2.connect(settings.DATABASE_URL)
++        cur = conn.cursor()
++        cur.execute("SELECT id, filename, file_url, file_hash FROM documents ORDER BY id DESC")
++        rows = cur.fetchall()
++        cur.close()
++        conn.close()
++        
++        documents = [{"id": row[0], "filename": row[1], "file_url": row[2], "file_hash": row[3]} for row in rows]
++        return {"documents": documents}
++    except Exception as e:
++        print(f"Error fetching documents: {e}")
++        raise HTTPException(status_code=500, detail="Failed to fetch documents")

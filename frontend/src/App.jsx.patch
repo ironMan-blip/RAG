@@ -1,0 +1,47 @@
+--- App.jsx
++++ App.jsx
+@@ -1,7 +1,8 @@
+ import { useState, useRef, useEffect } from 'react';
+-import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, FileSearch } from 'lucide-react';
++import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, FileSearch, Database } from 'lucide-react';
+ import './App.css';
++import DatabaseExplorer from './DatabaseExplorer';
+ 
+ const BACKEND_URL = 'http://localhost:8000/api/chat';
+ const UPLOAD_URL = 'http://localhost:8000/api/upload';
+@@ -16,6 +17,7 @@
+   const [existingFiles, setExistingFiles] = useState([]);
+   const [showFileSelector, setShowFileSelector] = useState(false);
+   const [selectedExistingFile, setSelectedExistingFile] = useState(null);
++  const [showDbModal, setShowDbModal] = useState(false);
+   const chatBoxRef = useRef(null);
+   const fileInputRef = useRef(null);
+ 
+@@ -131,6 +133,16 @@
+             <span className="status-indicator">
+               <span className="dot"></span> Online
+             </span>
++          </div>
++          <div className="header-actions" style={{ marginLeft: 'auto' }}>
++            <button 
++              onClick={() => setShowDbModal(true)}
++              style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
++              title="View Database"
++            >
++              <Database size={16} />
++              Database
++            </button>
+           </div>
+         </header>
+ 
+@@ -163,6 +175,10 @@
+             </div>
+           )}
+         </main>
++
++        {showDbModal && (
++          <DatabaseExplorer onClose={() => setShowDbModal(false)} documentsUrl={DOCUMENTS_URL} />
++        )}
+ 
+         <footer className="chat-input-area">
+           {(selectedFile || selectedExistingFile) && (

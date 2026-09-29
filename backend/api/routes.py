@@ -188,3 +188,39 @@ async def get_all_chunks(limit: int = 100, offset: int = 0):
         print(f"Error fetching all chunks: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch chunks")
 
+@router.get("/documents")
+async def get_all_documents():
+    try:
+        conn = psycopg2.connect(settings.DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT id, filename, file_url, file_hash FROM documents ORDER BY id DESC")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        documents = [{"id": row[0], "filename": row[1], "file_url": row[2], "file_hash": row[3]} for row in rows]
+        return {"documents": documents}
+    except Exception as e:
+        print(f"Error fetching documents: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch documents")
+
+@router.get("/documents/{doc_id}/content")
+async def get_document_content(doc_id: int):
+    try:
+        conn = psycopg2.connect(settings.DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT filename, content FROM documents WHERE id = %s", (doc_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Document not found")
+            
+        return {"id": doc_id, "filename": row[0], "extracted_text": row[1]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching document content: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch document content")
+
