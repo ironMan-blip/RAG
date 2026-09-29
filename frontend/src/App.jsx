@@ -121,7 +121,7 @@ function App() {
       <div className="chat-container">
         <header className="chat-header">
           <div className="header-icon">
-            <Sparkles size={24} color="#fff" />
+            <Sparkles size={24} color="#111111" />
           </div>
           <div className="header-info">
             <h2>AI Assistant</h2>
@@ -132,7 +132,6 @@ function App() {
           <div className="header-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
             <button 
               onClick={() => setShowChunksModal(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
               title="View Chunks"
             >
               <Layers size={16} />
@@ -140,7 +139,6 @@ function App() {
             </button>
             <button 
               onClick={() => setShowDbModal(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
               title="View Database"
             >
               <Database size={16} />
@@ -199,12 +197,12 @@ function App() {
               </button>
             </div>
           )}
-          <div className="input-wrapper" style={{ position: 'relative' }}>
-            <div className="file-actions" style={{ display: 'flex', gap: '8px' }}>
-              <input 
+          <div className="input-wrapper" >
+            <div className="file-actions" >
+              <input style={{ display: "none" }} 
                 type="file" 
                 ref={fileInputRef} 
-                style={{ display: 'none' }} 
+                 
                 onChange={handleFileSelect}
               />
               <button 

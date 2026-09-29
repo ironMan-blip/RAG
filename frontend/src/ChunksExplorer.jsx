@@ -112,7 +112,7 @@ export default function ChunksExplorer({ onClose }) {
         <div style={{ padding: '24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
           <div>
             <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.5rem', color: '#0f172a' }}>
-              <Layers size={28} color="#8b5cf6" />
+              <Layers size={28} color="#111111" />
               Chunks Manager
             </h2>
             <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '0.9rem' }}>Group your files together into custom chunks</p>
@@ -135,7 +135,7 @@ export default function ChunksExplorer({ onClose }) {
             />
           </div>
           <button type="submit" disabled={!newChunkName.trim()} style={{
-            padding: '0 24px', borderRadius: '8px', background: newChunkName.trim() ? '#8b5cf6' : '#c4b5fd', color: '#fff', border: 'none', cursor: newChunkName.trim() ? 'pointer' : 'not-allowed', fontWeight: '600', fontSize: '1rem', transition: 'all 0.2s'
+            padding: '0 24px', borderRadius: '8px', background: newChunkName.trim() ? '#111111' : '#888888', color: '#fff', border: 'none', cursor: newChunkName.trim() ? 'pointer' : 'not-allowed', fontWeight: '600', fontSize: '1rem', transition: 'all 0.2s'
           }}>
             Create Chunk
           </button>
@@ -168,7 +168,7 @@ export default function ChunksExplorer({ onClose }) {
                       }}
                     >
                       <div style={{ fontWeight: '600', color: '#0f172a', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Database size={18} color="#8b5cf6" />
+                        <Database size={18} color="#111111" />
                         {chunk.name}
                       </div>
                       <button 
@@ -187,8 +187,8 @@ export default function ChunksExplorer({ onClose }) {
                         <button 
                           onClick={() => setShowAddDocs(isAdding ? null : chunk.id)}
                           style={{
-                            background: isAdding ? '#f1f5f9' : '#eff6ff', border: 'none', borderRadius: '6px', cursor: 'pointer',
-                            padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: isAdding ? '#475569' : '#3b82f6', fontWeight: '600'
+                            background: isAdding ? '#f1f5f9' : '#f4f4f5', border: 'none', borderRadius: '6px', cursor: 'pointer',
+                            padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: isAdding ? '#475569' : '#111111', fontWeight: '600'
                           }}
                         >
                           {isAdding ? 'Done' : <><Plus size={14} /> Add File</>}
@@ -205,7 +205,7 @@ export default function ChunksExplorer({ onClose }) {
                               {unaddedDocs.map(doc => (
                                 <div key={doc.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#fff', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
                                   <span style={{ fontSize: '0.85rem', color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, marginRight: '8px' }}>{doc.filename}</span>
-                                  <button onClick={() => handleAddDocument(chunk.id, doc.id)} style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 8px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 'bold' }}>Add</button>
+                                  <button onClick={() => handleAddDocument(chunk.id, doc.id)} style={{ background: '#111111', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 8px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 'bold' }}>Add</button>
                                 </div>
                               ))}
                             </div>
@@ -223,7 +223,7 @@ export default function ChunksExplorer({ onClose }) {
                           chunkDocs.map(doc => (
                             <div key={doc.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#ffffff', borderRadius: '6px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
-                                <FileText size={16} color="#3b82f6" style={{ flexShrink: 0 }} />
+                                <FileText size={16} color="#111111" style={{ flexShrink: 0 }} />
                                 <span style={{ fontSize: '0.9rem', color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={doc.filename}>{doc.filename}</span>
                               </div>
                               <button

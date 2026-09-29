@@ -77,7 +77,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl }) {
           alignItems: 'center'
         }}>
           <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.25rem' }}>
-            <DatabaseIcon size={24} color="#3b82f6" />
+            <DatabaseIcon size={24} color="#111111" />
             Database Explorer
           </h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '5px' }}>
@@ -108,7 +108,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl }) {
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <FileText size={20} color="#3b82f6" style={{ marginRight: '10px' }} />
+                      <FileText size={20} color="#111111" style={{ marginRight: '10px' }} />
                       <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{doc.filename}</div>
                     </div>
                     <button 
