@@ -23,16 +23,16 @@ def get_database_context(query: str, attached_filename: str = None) -> str:
                     # If a file is attached, prioritize returning its chunks.
                     # We'll get the first 3 chunks to help with summaries, plus 3 semantically relevant ones.
                     cur.execute("""
-                        (
+                        SELECT sub.chunk_text, sub.filename, sub.chunk_id FROM (
                             SELECT c.chunk_text, d.filename, c.chunk_id
                             FROM chunks c
                             JOIN documents d ON c.doc_id = d.id
                             WHERE d.filename = %s
                             ORDER BY c.chunk_embedding <-> %s::vector
                             LIMIT 3
-                        )
-                        ORDER BY chunk_id ASC
-                    """, (attached_filename, attached_filename, query_embedding))
+                        ) sub
+                        ORDER BY sub.chunk_id ASC
+                    """, (attached_filename, query_embedding))
                 else:
                     # General vector search across all documents
                     cur.execute("""
@@ -86,4 +86,12 @@ def get_chat_completion(message: str, attached_filename: str = None) -> str:
         extra_body={"reasoning": {"enabled": True}}
     )
     
+    if not response.choices:
+        error_info = getattr(response, "error", "Unknown AI Provider Error")
+        if isinstance(error_info, dict):
+            error_msg = error_info.get("message", str(error_info))
+        else:
+            error_msg = str(error_info)
+        return f"⚠️ **AI Provider Error**: {error_msg}"
+        
     return response.choices[0].message.content
