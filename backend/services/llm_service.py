@@ -2,16 +2,20 @@ from openai import OpenAI
 from core.config import settings
 from core.database import get_db_connection
 
+try:
+    from sentence_transformers import SentenceTransformer
+    embedder = SentenceTransformer('all-MiniLM-L6-v2')
+except ImportError:
+    embedder = None
+    print("sentence_transformers not installed.")
+
 def get_database_context(query: str, attached_filename: str = None) -> str:
     context = ""
     try:
-        try:
-            from sentence_transformers import SentenceTransformer
-            embedder = SentenceTransformer('all-MiniLM-L6-v2')
-            query_embedding = embedder.encode(query).tolist()
-        except ImportError:
-            print("sentence_transformers not installed.")
+        if embedder is None:
             return ""
+            
+        query_embedding = embedder.encode(query).tolist()
 
         with get_db_connection() as conn:
             with conn.cursor() as cur:
