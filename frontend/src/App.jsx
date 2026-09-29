@@ -60,6 +60,7 @@ function App() {
     setIsLoading(true);
 
     try {
+      let attachedFilename = null;
       if (fileToUpload) {
         // Upload the file first
         const formData = new FormData();
@@ -73,13 +74,7 @@ function App() {
         if (!uploadRes.ok) throw new Error("File upload failed");
         const uploadData = await uploadRes.json();
         
-        // Append actual filename and extracted text from server to the prompt
-        let fileContext = `[Attached File: ${uploadData.filename}]`;
-        if (uploadData.extracted_text) {
-          fileContext += `\n[File Content: ${uploadData.extracted_text}]`;
-        }
-        
-        finalMessage = text ? `${fileContext}\n\n${text}` : fileContext;
+        attachedFilename = uploadData.filename;
       }
 
       const response = await fetch(BACKEND_URL, {
@@ -87,7 +82,10 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: finalMessage || "File attached." })
+        body: JSON.stringify({ 
+          message: text || "",
+          attached_filename: attachedFilename 
+        })
       });
 
       if (!response.ok) {

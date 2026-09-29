@@ -27,10 +27,21 @@ async def get_all_chunks():
                         WHERE cd.chunk_id = %s
                     """, (chunk_id,))
                     docs = cur.fetchall()
+                    
+                    cur.execute("""
+                        SELECT d.id, d.filename 
+                        FROM documents d
+                        WHERE d.id NOT IN (
+                            SELECT document_id FROM chunk_documents WHERE chunk_id = %s
+                        )
+                    """, (chunk_id,))
+                    unadded_docs = cur.fetchall()
+                    
                     result.append({
                         "id": chunk_id, 
                         "name": chunk_name, 
-                        "documents": [{"id": d[0], "filename": d[1]} for d in docs]
+                        "documents": [{"id": d[0], "filename": d[1]} for d in docs],
+                        "unadded_documents": [{"id": d[0], "filename": d[1]} for d in unadded_docs]
                     })
         return {"chunks": result}
     except Exception as e:

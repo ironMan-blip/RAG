@@ -155,7 +155,7 @@ export default function ChunksExplorer({ onClose }) {
               {chunks.map(chunk => {
                 const isAdding = showAddDocs === chunk.id;
                 const chunkDocs = chunk.documents || [];
-                const unaddedDocs = availableDocs.filter(d => !chunkDocs.some(cd => cd.id === d.id));
+                const unaddedDocs = chunk.unadded_documents || [];
                 
                 return (
                   <div key={chunk.id} style={{ 
