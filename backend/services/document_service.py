@@ -85,6 +85,12 @@ def get_all_documents():
     return [{"id": r[0], "filename": r[1], "file_hash": r[2]} for r in rows]
 
 def delete_document(doc_id: int) -> bool:
+    try:
+        from services.chunk_service import delete_chunks_for_document
+        delete_chunks_for_document(doc_id)
+    except Exception as e:
+        print(f"Failed to delete chunks: {e}")
+
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM documents WHERE id = %s RETURNING id", (doc_id,))
