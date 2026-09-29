@@ -1,4 +1,5 @@
 from openai import OpenAI
+from langsmith import traceable, wrappers
 from core.config import settings
 from core.database import get_db_connection
 
@@ -9,6 +10,7 @@ except ImportError:
     embedder = None
     print("sentence_transformers not installed.")
 
+@traceable
 def get_database_context(query: str, attached_filename: str = None) -> str:
     context = ""
     try:
@@ -23,16 +25,16 @@ def get_database_context(query: str, attached_filename: str = None) -> str:
                     # If a file is attached, prioritize returning its chunks.
                     # We'll get the first 3 chunks to help with summaries, plus 3 semantically relevant ones.
                     cur.execute("""
-                        (
+                        SELECT sub.chunk_text, sub.filename, sub.chunk_id FROM (
                             SELECT c.chunk_text, d.filename, c.chunk_id
                             FROM chunks c
                             JOIN documents d ON c.doc_id = d.id
                             WHERE d.filename = %s
                             ORDER BY c.chunk_embedding <-> %s::vector
                             LIMIT 3
-                        )
-                        ORDER BY chunk_id ASC
-                    """, (attached_filename, attached_filename, query_embedding))
+                        ) sub
+                        ORDER BY sub.chunk_id ASC
+                    """, (attached_filename, query_embedding))
                 else:
                     # General vector search across all documents
                     cur.execute("""
@@ -58,18 +60,19 @@ def get_database_context(query: str, attached_filename: str = None) -> str:
     return context
 
 # Initialize the OpenAI client pointing to OpenRouter
-client = OpenAI(
+client = wrappers.wrap_openai(OpenAI(
   base_url=settings.OPENROUTER_BASE_URL,
   api_key=settings.OPENROUTER_API_KEY,
-)
+))
 
+@traceable
 def get_chat_completion(message: str, attached_filename: str = None) -> str:
     """Sends a message to the AI and retrieves the reply, including database context."""
     db_context = get_database_context(message, attached_filename)
     
     system_prompt = "You are a very helpful AI assistant. Use the provided database context to answer the user's query."
     if db_context:
-        system_prompt += f"\n\nDATABASE CONTEXT:\n{db_context}"
+        system_prompt += f"\n\nADDITIONAL DOCUMENTS/CONTEXT:\n{db_context}"
 
     response = client.chat.completions.create(
         model=settings.LLM_MODEL,
@@ -86,4 +89,12 @@ def get_chat_completion(message: str, attached_filename: str = None) -> str:
         extra_body={"reasoning": {"enabled": True}}
     )
     
+    if not response.choices:
+        error_info = getattr(response, "error", "Unknown AI Provider Error")
+        if isinstance(error_info, dict):
+            error_msg = error_info.get("message", str(error_info))
+        else:
+            error_msg = str(error_info)
+        return f"⚠️ **AI Provider Error**: {error_msg}"
+        
     return response.choices[0].message.content
