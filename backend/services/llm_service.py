@@ -12,9 +12,7 @@ except ImportError:
 
 try:
     from laya import Router
-    print("laya imported successfully in backend")
     laya_router = Router()
-    print("laya_router created successfully in backend")
 except ImportError:
     laya_router = None
     print("laya not installed. Run `pip install laya`")
@@ -83,12 +81,17 @@ def laya_decide_if_context_needed(message: str) -> bool:
     questions = {
         "needs_context": {
             "type": "noul", 
-            "instructions": "Does this message require looking up facts, data, or external documents? (Yes for factual queries, No for casual greetings or general chat)"
+            "instructions": "Does `request` require looking up facts, data, or external documents?",
+            "criteria": {
+                "false": "casual greetings, conversational chat, or statements that require no context",
+                "true": "factual queries or questions that need external documents"
+            }
         }
     }
     
-    result = laya_router.predict(message, questions)
+    result = laya_router.predict({"request": message}, questions)
     probability_yes = result["answers"]["needs_context"]["noul"]
+    print("probability_yes", probability_yes*100, "%")
     return probability_yes > 0.5
 
 @traceable
