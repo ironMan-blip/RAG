@@ -28,15 +28,6 @@ def get_database_context(query: str, attached_filename: str = None) -> str:
                             FROM chunks c
                             JOIN documents d ON c.doc_id = d.id
                             WHERE d.filename = %s
-                            ORDER BY c.chunk_id ASC
-                            LIMIT 3
-                        )
-                        UNION
-                        (
-                            SELECT c.chunk_text, d.filename, c.chunk_id
-                            FROM chunks c
-                            JOIN documents d ON c.doc_id = d.id
-                            WHERE d.filename = %s
                             ORDER BY c.chunk_embedding <-> %s::vector
                             LIMIT 3
                         )
