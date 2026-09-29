@@ -10,6 +10,15 @@ except ImportError:
     embedder = None
     print("sentence_transformers not installed.")
 
+try:
+    from laya import Router
+    print("laya imported successfully in backend")
+    laya_router = Router()
+    print("laya_router created successfully in backend")
+except ImportError:
+    laya_router = None
+    print("laya not installed. Run `pip install laya`")
+
 @traceable
 def get_database_context(query: str, attached_filename: str = None) -> str:
     context = ""
@@ -66,13 +75,34 @@ client = wrappers.wrap_openai(OpenAI(
 ))
 
 @traceable
+def laya_decide_if_context_needed(message: str) -> bool:
+    """Uses Laya to decide if external documents are needed for this query."""
+    if laya_router is None:
+        return True
+
+    questions = {
+        "needs_context": {
+            "type": "noul", 
+            "instructions": "Does this message require looking up facts, data, or external documents? (Yes for factual queries, No for casual greetings or general chat)"
+        }
+    }
+    
+    result = laya_router.predict(message, questions)
+    probability_yes = result["answers"]["needs_context"]["noul"]
+    return probability_yes > 0.5
+
+@traceable
 def get_chat_completion(message: str, attached_filename: str = None) -> str:
     """Sends a message to the AI and retrieves the reply, including database context."""
-    db_context = get_database_context(message, attached_filename)
+    db_context = ""
+    needs_context = True if attached_filename else laya_decide_if_context_needed(message)
     
-    system_prompt = "You are a very helpful AI assistant. Use the provided database context to answer the user's query."
+    if needs_context:
+        db_context = get_database_context(message, attached_filename)
+    
+    system_prompt = "You are a very helpful AI assistant."
     if db_context:
-        system_prompt += f"\n\nADDITIONAL DOCUMENTS/CONTEXT:\n{db_context}"
+        system_prompt += f" Use the provided database context to answer the user's query.\n\nADDITIONAL DOCUMENTS/CONTEXT:\n{db_context}"
 
     response = client.chat.completions.create(
         model=settings.LLM_MODEL,
