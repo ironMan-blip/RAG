@@ -58,6 +58,15 @@ def init_db():
             )
         ''')
         
+        # Create chunks table
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS chunks (
+                chunk_id SERIAL PRIMARY KEY,
+                document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
+                chunk_text TEXT NOT NULL
+            )
+        ''')
+        
         # Load existing files from the 'database' folder
         if os.path.exists(DATABASE_DIR):
             for filename in os.listdir(DATABASE_DIR):
@@ -77,10 +86,37 @@ def init_db():
                 
                 try:
                     cur.execute(
-                        "INSERT INTO documents (filename, content, file_hash, file_url) VALUES (%s, %s, %s, %s) ON CONFLICT (filename) DO UPDATE SET content = EXCLUDED.content, file_hash = EXCLUDED.file_hash, file_url = EXCLUDED.file_url",
+                        "INSERT INTO documents (filename, content, file_hash, file_url) VALUES (%s, %s, %s, %s) ON CONFLICT (filename) DO UPDATE SET content = EXCLUDED.content, file_hash = EXCLUDED.file_hash, file_url = EXCLUDED.file_url RETURNING id",
                         (filename, content, file_hash, file_url)
                     )
-                    print(f"Inserted/Updated {filename}")
+                    result = cur.fetchone()
+                    if result:
+                        doc_id = result[0]
+                    else:
+                        cur.execute("SELECT id FROM documents WHERE filename = %s", (filename,))
+                        doc_id = cur.fetchone()[0]
+                    
+                    # Delete existing chunks for this document
+                    cur.execute("DELETE FROM chunks WHERE document_id = %s", (doc_id,))
+                    
+                    # Create chunks (assuming 5 lines max per chunk instead of 'files')
+                    lines = content.split('\n')
+                    chunk_lines = []
+                    for line in lines:
+                        chunk_lines.append(line)
+                        if len(chunk_lines) == 5:
+                            cur.execute(
+                                "INSERT INTO chunks (document_id, chunk_text) VALUES (%s, %s)",
+                                (doc_id, '\n'.join(chunk_lines))
+                            )
+                            chunk_lines = []
+                    if chunk_lines:
+                        cur.execute(
+                            "INSERT INTO chunks (document_id, chunk_text) VALUES (%s, %s)",
+                            (doc_id, '\n'.join(chunk_lines))
+                        )
+                        
+                    print(f"Inserted/Updated {filename} and its chunks")
                 except Exception as e:
                     print(f"Failed to insert {filename}: {e}")
                     conn.rollback()

@@ -108,13 +108,40 @@ async def upload_file(file: UploadFile = File(...)):
                 conn = psycopg2.connect(settings.DATABASE_URL)
                 cur = conn.cursor()
                 cur.execute(
-                    "INSERT INTO documents (filename, content, file_hash, file_url) VALUES (%s, %s, %s, %s) ON CONFLICT (filename) DO UPDATE SET content = EXCLUDED.content, file_hash = EXCLUDED.file_hash, file_url = EXCLUDED.file_url",
+                    "INSERT INTO documents (filename, content, file_hash, file_url) VALUES (%s, %s, %s, %s) ON CONFLICT (filename) DO UPDATE SET content = EXCLUDED.content, file_hash = EXCLUDED.file_hash, file_url = EXCLUDED.file_url RETURNING id",
                     (file.filename, extracted_text.strip(), file_hash, file_url)
                 )
+                
+                # Fetch the document id (either newly inserted or updated)
+                result = cur.fetchone()
+                if result:
+                    doc_id = result[0]
+                else:
+                    cur.execute("SELECT id FROM documents WHERE filename = %s", (file.filename,))
+                    doc_id = cur.fetchone()[0]
+                
+                # Update chunks for this document
+                cur.execute("DELETE FROM chunks WHERE document_id = %s", (doc_id,))
+                lines = extracted_text.strip().split('\n')
+                chunk_lines = []
+                for line in lines:
+                    chunk_lines.append(line)
+                    if len(chunk_lines) == 5:
+                        cur.execute(
+                            "INSERT INTO chunks (document_id, chunk_text) VALUES (%s, %s)",
+                            (doc_id, '\n'.join(chunk_lines))
+                        )
+                        chunk_lines = []
+                if chunk_lines:
+                    cur.execute(
+                        "INSERT INTO chunks (document_id, chunk_text) VALUES (%s, %s)",
+                        (doc_id, '\n'.join(chunk_lines))
+                    )
+                
                 conn.commit()
                 cur.close()
                 conn.close()
-                upload_message += " and saved to database"
+                upload_message += " and saved to database with chunks"
             except Exception as db_err:
                 print(f"Database insertion error: {db_err}")
                 upload_message += f" but failed to save to DB: {db_err}"
@@ -128,3 +155,36 @@ async def upload_file(file: UploadFile = File(...)):
     except Exception as e:
         print(f"Error during file upload: {e}")
         raise HTTPException(status_code=500, detail="File upload failed")
+
+@router.get("/documents/{doc_id}/chunks")
+async def get_document_chunks(doc_id: int):
+    try:
+        conn = psycopg2.connect(settings.DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT chunk_id, chunk_text FROM chunks WHERE document_id = %s ORDER BY chunk_id", (doc_id,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        chunks = [{"chunk_id": row[0], "chunk_text": row[1]} for row in rows]
+        return {"document_id": doc_id, "chunks": chunks}
+    except Exception as e:
+        print(f"Error fetching chunks for document {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch chunks")
+
+@router.get("/chunks")
+async def get_all_chunks(limit: int = 100, offset: int = 0):
+    try:
+        conn = psycopg2.connect(settings.DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT chunk_id, document_id, chunk_text FROM chunks ORDER BY chunk_id LIMIT %s OFFSET %s", (limit, offset))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        chunks = [{"chunk_id": row[0], "document_id": row[1], "chunk_text": row[2]} for row in rows]
+        return {"chunks": chunks, "limit": limit, "offset": offset}
+    except Exception as e:
+        print(f"Error fetching all chunks: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch chunks")
+
