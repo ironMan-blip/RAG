@@ -79,7 +79,13 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str)
                         "INSERT INTO documents (filename, content, file_hash, file_url) VALUES (%s, %s, %s, %s) ON CONFLICT (filename) DO UPDATE SET content = EXCLUDED.content, file_hash = EXCLUDED.file_hash, file_url = EXCLUDED.file_url RETURNING id",
                         (file_name, extracted_text.strip(), file_hash, file_url)
                     )
+                    doc_id = cur.fetchone()[0]
                     conn.commit()
+            
+            # Create chunks for the newly saved/updated document
+            from services.chunk_service import create_chunks_for_document
+            create_chunks_for_document(doc_id, extracted_text.strip())
+            
             upload_message += " and saved to database"
         except Exception as db_err:
             upload_message += f" but failed to save to DB: {db_err}"
