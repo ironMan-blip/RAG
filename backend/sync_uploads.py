@@ -44,18 +44,22 @@ def sync_uploads():
             
             lines = content.split('\n')
             chunk_lines = []
+            chunk_index = 1
             for line in lines:
                 chunk_lines.append(line)
                 if len(chunk_lines) == 5:
+                    chunk_name = f"{filename}_chunk_{chunk_index}"
                     cur.execute(
-                        "INSERT INTO chunks (document_id, chunk_text) VALUES (%s, %s)",
-                        (doc_id, '\n'.join(chunk_lines))
+                        "INSERT INTO chunks (document_id, chunk_name, chunk_text) VALUES (%s, %s, %s)",
+                        (doc_id, chunk_name, '\n'.join(chunk_lines))
                     )
                     chunk_lines = []
+                    chunk_index += 1
             if chunk_lines:
+                chunk_name = f"{filename}_chunk_{chunk_index}"
                 cur.execute(
-                    "INSERT INTO chunks (document_id, chunk_text) VALUES (%s, %s)",
-                    (doc_id, '\n'.join(chunk_lines))
+                    "INSERT INTO chunks (document_id, chunk_name, chunk_text) VALUES (%s, %s, %s)",
+                    (doc_id, chunk_name, '\n'.join(chunk_lines))
                 )
                 
             print(f"Synced {filename}")

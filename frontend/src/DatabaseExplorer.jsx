@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Database as DatabaseIcon } from 'lucide-react';
+import { X, FileText, Database as DatabaseIcon, Trash2, AlertTriangle } from 'lucide-react';
 
 export default function DatabaseExplorer({ onClose, documentsUrl }) {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [documentToDelete, setDocumentToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
@@ -20,6 +22,30 @@ export default function DatabaseExplorer({ onClose, documentsUrl }) {
       console.error("Failed to fetch documents", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteClick = (doc) => {
+    setDocumentToDelete(doc);
+  };
+
+  const executeDelete = async () => {
+    if (!documentToDelete) return;
+    setIsDeleting(true);
+    try {
+      const deleteUrl = `${documentsUrl}/${documentToDelete.id}`;
+      const res = await fetch(deleteUrl, { method: 'DELETE' });
+      if (res.ok) {
+        setDocuments(documents.filter(doc => doc.id !== documentToDelete.id));
+        setDocumentToDelete(null);
+      } else {
+        alert("Failed to delete document.");
+      }
+    } catch (error) {
+      console.error("Failed to delete document", error);
+      alert("Error deleting document.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -77,13 +103,30 @@ export default function DatabaseExplorer({ onClose, documentsUrl }) {
                       padding: '15px', 
                       display: 'flex', 
                       alignItems: 'center', 
+                      justifyContent: 'space-between',
                       backgroundColor: '#fff'
                     }}
                   >
-                    <FileText size={20} color="#3b82f6" style={{ marginRight: '10px' }} />
-                    <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <FileText size={20} color="#3b82f6" style={{ marginRight: '10px' }} />
                       <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{doc.filename}</div>
                     </div>
+                    <button 
+                      onClick={() => handleDeleteClick(doc)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: '5px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#ef4444'
+                      }}
+                      title="Delete Document"
+                    >
+                      <Trash2 size={20} />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -91,6 +134,74 @@ export default function DatabaseExplorer({ onClose, documentsUrl }) {
           )}
         </div>
       </div>
+
+      {documentToDelete && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1100
+        }}>
+          <div style={{
+            backgroundColor: '#fff',
+            borderRadius: '8px',
+            padding: '24px',
+            width: '90%',
+            maxWidth: '400px',
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#ef4444' }}>
+              <AlertTriangle size={28} />
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>Delete Document</h3>
+            </div>
+            
+            <p style={{ margin: 0, color: '#475569', lineHeight: '1.5' }}>
+              Are you sure you want to delete <strong>{documentToDelete.filename}</strong>? 
+              This action cannot be undone and will remove all associated data.
+            </p>
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+              <button 
+                onClick={() => setDocumentToDelete(null)}
+                disabled={isDeleting}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  backgroundColor: '#fff',
+                  color: '#475569',
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  fontWeight: '500'
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={executeDelete}
+                disabled={isDeleting}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: '#ef4444',
+                  color: '#fff',
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  fontWeight: '500',
+                  opacity: isDeleting ? 0.7 : 1
+                }}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

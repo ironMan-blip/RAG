@@ -124,18 +124,22 @@ async def upload_file(file: UploadFile = File(...)):
                 cur.execute("DELETE FROM chunks WHERE document_id = %s", (doc_id,))
                 lines = extracted_text.strip().split('\n')
                 chunk_lines = []
+                chunk_index = 1
                 for line in lines:
                     chunk_lines.append(line)
                     if len(chunk_lines) == 5:
+                        chunk_name = f"{file.filename}_chunk_{chunk_index}"
                         cur.execute(
-                            "INSERT INTO chunks (document_id, chunk_text) VALUES (%s, %s)",
-                            (doc_id, '\n'.join(chunk_lines))
+                            "INSERT INTO chunks (document_id, chunk_name, chunk_text) VALUES (%s, %s, %s)",
+                            (doc_id, chunk_name, '\n'.join(chunk_lines))
                         )
                         chunk_lines = []
+                        chunk_index += 1
                 if chunk_lines:
+                    chunk_name = f"{file.filename}_chunk_{chunk_index}"
                     cur.execute(
-                        "INSERT INTO chunks (document_id, chunk_text) VALUES (%s, %s)",
-                        (doc_id, '\n'.join(chunk_lines))
+                        "INSERT INTO chunks (document_id, chunk_name, chunk_text) VALUES (%s, %s, %s)",
+                        (doc_id, chunk_name, '\n'.join(chunk_lines))
                     )
                 
                 conn.commit()
@@ -161,12 +165,12 @@ async def get_document_chunks(doc_id: int):
     try:
         conn = psycopg2.connect(settings.DATABASE_URL)
         cur = conn.cursor()
-        cur.execute("SELECT chunk_id, chunk_text FROM chunks WHERE document_id = %s ORDER BY chunk_id", (doc_id,))
+        cur.execute("SELECT chunk_id, chunk_name, chunk_text FROM chunks WHERE document_id = %s ORDER BY chunk_id", (doc_id,))
         rows = cur.fetchall()
         cur.close()
         conn.close()
         
-        chunks = [{"chunk_id": row[0], "chunk_text": row[1]} for row in rows]
+        chunks = [{"chunk_id": row[0], "chunk_name": row[1], "chunk_text": row[2]} for row in rows]
         return {"document_id": doc_id, "chunks": chunks}
     except Exception as e:
         print(f"Error fetching chunks for document {doc_id}: {e}")
@@ -177,12 +181,12 @@ async def get_all_chunks(limit: int = 100, offset: int = 0):
     try:
         conn = psycopg2.connect(settings.DATABASE_URL)
         cur = conn.cursor()
-        cur.execute("SELECT chunk_id, document_id, chunk_text FROM chunks ORDER BY chunk_id LIMIT %s OFFSET %s", (limit, offset))
+        cur.execute("SELECT chunk_id, document_id, chunk_name, chunk_text FROM chunks ORDER BY chunk_id LIMIT %s OFFSET %s", (limit, offset))
         rows = cur.fetchall()
         cur.close()
         conn.close()
         
-        chunks = [{"chunk_id": row[0], "document_id": row[1], "chunk_text": row[2]} for row in rows]
+        chunks = [{"chunk_id": row[0], "document_id": row[1], "chunk_name": row[2], "chunk_text": row[3]} for row in rows]
         return {"chunks": chunks, "limit": limit, "offset": offset}
     except Exception as e:
         print(f"Error fetching all chunks: {e}")
@@ -203,6 +207,44 @@ async def get_all_documents():
     except Exception as e:
         print(f"Error fetching documents: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch documents")
+
+@router.delete("/documents/{doc_id}")
+async def delete_document(doc_id: int):
+    try:
+        conn = psycopg2.connect(settings.DATABASE_URL)
+        cur = conn.cursor()
+        
+        # Optionally, get filename to delete local file
+        cur.execute("SELECT filename FROM documents WHERE id = %s", (doc_id,))
+        doc = cur.fetchone()
+        
+        if doc:
+            filename = doc[0]
+            # Delete from database
+            cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
+            conn.commit()
+            
+            # Try to delete from local file system if it exists in uploads
+            file_path = os.path.join("uploads", filename)
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    print(f"Error removing local file {file_path}: {e}")
+            
+            message = "Document deleted successfully"
+        else:
+            raise HTTPException(status_code=404, detail="Document not found")
+            
+        cur.close()
+        conn.close()
+        
+        return {"status": "success", "message": message}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting document: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete document")
 
 @router.get("/documents/{doc_id}/content")
 async def get_document_content(doc_id: int):

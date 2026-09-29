@@ -63,8 +63,14 @@ def init_db():
             CREATE TABLE IF NOT EXISTS chunks (
                 chunk_id SERIAL PRIMARY KEY,
                 document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
+                chunk_name VARCHAR(255),
                 chunk_text TEXT NOT NULL
             )
+        ''')
+        
+        # Add column if it doesn't exist to update existing DB
+        cur.execute('''
+            ALTER TABLE chunks ADD COLUMN IF NOT EXISTS chunk_name VARCHAR(255);
         ''')
         
         # Load existing files from the 'database' folder
@@ -102,18 +108,22 @@ def init_db():
                     # Create chunks (assuming 5 lines max per chunk instead of 'files')
                     lines = content.split('\n')
                     chunk_lines = []
+                    chunk_index = 1
                     for line in lines:
                         chunk_lines.append(line)
                         if len(chunk_lines) == 5:
+                            chunk_name = f"{filename}_chunk_{chunk_index}"
                             cur.execute(
-                                "INSERT INTO chunks (document_id, chunk_text) VALUES (%s, %s)",
-                                (doc_id, '\n'.join(chunk_lines))
+                                "INSERT INTO chunks (document_id, chunk_name, chunk_text) VALUES (%s, %s, %s)",
+                                (doc_id, chunk_name, '\n'.join(chunk_lines))
                             )
                             chunk_lines = []
+                            chunk_index += 1
                     if chunk_lines:
+                        chunk_name = f"{filename}_chunk_{chunk_index}"
                         cur.execute(
-                            "INSERT INTO chunks (document_id, chunk_text) VALUES (%s, %s)",
-                            (doc_id, '\n'.join(chunk_lines))
+                            "INSERT INTO chunks (document_id, chunk_name, chunk_text) VALUES (%s, %s, %s)",
+                            (doc_id, chunk_name, '\n'.join(chunk_lines))
                         )
                         
                     print(f"Inserted/Updated {filename} and its chunks")
