@@ -20,13 +20,13 @@ export default function ChunksExplorer({ onClose }) {
     setLoading(true);
     try {
       const [chunksRes, docsRes] = await Promise.all([
-        fetch(`${API_BASE}/file-groups`),
+        fetch(`${API_BASE}/chunks`),
         fetch(`${API_BASE}/documents`)
       ]);
       
       if (chunksRes.ok) {
         const data = await chunksRes.json();
-        setChunks(data.file_groups || []);
+        setChunks(data.chunks || []);
       }
       
       if (docsRes.ok) {
@@ -44,7 +44,7 @@ export default function ChunksExplorer({ onClose }) {
     e.preventDefault();
     if (!newChunkName.trim()) return;
     try {
-      const res = await fetch(`${API_BASE}/file-groups`, {
+      const res = await fetch(`${API_BASE}/chunks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newChunkName.trim() })
@@ -64,7 +64,7 @@ export default function ChunksExplorer({ onClose }) {
   const handleDeleteChunk = async (chunkId) => {
     if (!window.confirm("Are you sure you want to delete this chunk?")) return;
     try {
-      const res = await fetch(`${API_BASE}/file-groups/${chunkId}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/chunks/${chunkId}`, { method: 'DELETE' });
       if (res.ok) {
         fetchData();
       }
@@ -75,7 +75,7 @@ export default function ChunksExplorer({ onClose }) {
 
   const handleAddDocument = async (chunkId, documentId) => {
     try {
-      const res = await fetch(`${API_BASE}/file-groups/${chunkId}/documents`, {
+      const res = await fetch(`${API_BASE}/chunks/${chunkId}/documents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ document_id: documentId })
@@ -90,7 +90,7 @@ export default function ChunksExplorer({ onClose }) {
 
   const handleRemoveDocument = async (chunkId, documentId) => {
     try {
-      const res = await fetch(`${API_BASE}/file-groups/${chunkId}/documents/${documentId}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/chunks/${chunkId}/documents/${documentId}`, { method: 'DELETE' });
       if (res.ok) {
         fetchData();
       }

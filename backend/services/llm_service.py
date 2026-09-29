@@ -16,36 +16,32 @@ try:
 except ImportError:
     PYPDF_AVAILABLE = False
 
-import psycopg2
-from core.config import settings
+from core.database import get_db_connection
 
 def get_database_context() -> str:
     context = ""
     try:
-        conn = psycopg2.connect(settings.DATABASE_URL)
-        cur = conn.cursor()
-        cur.execute("SELECT filename, content FROM documents")
-        rows = cur.fetchall()
-        for filename, content in rows:
-            context += f"\n--- Content of {filename} ---\n{content}\n"
-            
-        # Include file group (chunk) information
-        cur.execute("""
-            SELECT fg.name, array_agg(d.filename)
-            FROM file_groups fg
-            LEFT JOIN file_group_documents fgd ON fg.id = fgd.group_id
-            LEFT JOIN documents d ON fgd.document_id = d.id
-            GROUP BY fg.name
-        """)
-        group_rows = cur.fetchall()
-        if group_rows:
-            context += "\n--- File Groups (Chunks) ---\n"
-            for group_name, filenames in group_rows:
-                valid_files = [f for f in filenames if f is not None]
-                files_str = ", ".join(valid_files) if valid_files else "No files"
-                context += f"Chunk '{group_name}' contains files: {files_str}\n"
-        cur.close()
-        conn.close()
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT filename, content FROM documents")
+                rows = cur.fetchall()
+                for filename, content in rows:
+                    context += f"\n--- Content of {filename} ---\n{content}\n"
+                    
+                cur.execute("""
+                    SELECT c.name, array_agg(d.filename)
+                    FROM chunks c
+                    LEFT JOIN chunk_documents cd ON c.id = cd.chunk_id
+                    LEFT JOIN documents d ON cd.document_id = d.id
+                    GROUP BY c.name
+                """)
+                group_rows = cur.fetchall()
+                if group_rows:
+                    context += "\n--- Chunks (Document Groups) ---\n"
+                    for chunk_name, filenames in group_rows:
+                        valid_files = [f for f in filenames if f is not None]
+                        files_str = ", ".join(valid_files) if valid_files else "No files"
+                        context += f"Chunk '{chunk_name}' contains files: {files_str}\n"
     except Exception as e:
         context = f"[Database error: {e}]"
         print(f"Error fetching database context: {e}")
