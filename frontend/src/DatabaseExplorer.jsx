@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Database as DatabaseIcon, ChevronRight, ChevronDown } from 'lucide-react';
+import { X, FileText, Database as DatabaseIcon } from 'lucide-react';
 
 export default function DatabaseExplorer({ onClose, documentsUrl }) {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [expandedDoc, setExpandedDoc] = useState(null);
-  const [docDetails, setDocDetails] = useState({});
-  const [loadingDetails, setLoadingDetails] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
@@ -23,44 +20,6 @@ export default function DatabaseExplorer({ onClose, documentsUrl }) {
       console.error("Failed to fetch documents", error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const toggleDocument = async (docId) => {
-    if (expandedDoc === docId) {
-      setExpandedDoc(null);
-      return;
-    }
-    
-    setExpandedDoc(docId);
-    
-    // Fetch chunks if we haven't already
-    if (!docDetails[docId]) {
-      setLoadingDetails(true);
-      try {
-        const [contentRes, chunksRes] = await Promise.all([
-          fetch(`${documentsUrl}/${docId}/content`),
-          fetch(`http://localhost:8000/api/documents/${docId}/chunks`)
-        ]);
-        
-        let contentData = null;
-        let chunksData = null;
-        
-        if (contentRes.ok) contentData = await contentRes.json();
-        if (chunksRes.ok) chunksData = await chunksRes.json();
-        
-        setDocDetails(prev => ({
-          ...prev,
-          [docId]: {
-            content: contentData?.extracted_text || "No content found.",
-            chunks: chunksData?.chunks || []
-          }
-        }));
-      } catch (error) {
-        console.error("Error fetching doc details:", error);
-      } finally {
-        setLoadingDetails(false);
-      }
     }
   };
 
@@ -114,68 +73,18 @@ export default function DatabaseExplorer({ onClose, documentsUrl }) {
                   borderRadius: '8px',
                   overflow: 'hidden'
                 }}>
-                  <div 
-                    onClick={() => toggleDocument(doc.id)}
-                    style={{ 
+                  <div style={{ 
                       padding: '15px', 
                       display: 'flex', 
                       alignItems: 'center', 
-                      cursor: 'pointer',
-                      backgroundColor: expandedDoc === doc.id ? '#f1f5f9' : '#fff'
+                      backgroundColor: '#fff'
                     }}
                   >
-                    {expandedDoc === doc.id ? <ChevronDown size={20} color="#64748b" style={{ marginRight: '10px' }} /> : <ChevronRight size={20} color="#64748b" style={{ marginRight: '10px' }} />}
                     <FileText size={20} color="#3b82f6" style={{ marginRight: '10px' }} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{doc.filename}</div>
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>ID: {doc.id} | Hash: {doc.file_hash?.substring(0, 8)}...</div>
                     </div>
                   </div>
-                  
-                  {expandedDoc === doc.id && (
-                    <div style={{ padding: '15px', borderTop: '1px solid #e2e8f0', backgroundColor: '#fafafa' }}>
-                      {loadingDetails && !docDetails[doc.id] ? (
-                        <p style={{ fontSize: '14px', color: '#64748b' }}>Loading details...</p>
-                      ) : docDetails[doc.id] ? (
-                        <div>
-                          <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#334155' }}>Extracted Content Preview:</h4>
-                          <div style={{ 
-                            backgroundColor: '#fff', 
-                            padding: '10px', 
-                            borderRadius: '6px', 
-                            border: '1px solid #e2e8f0',
-                            fontSize: '13px',
-                            maxHeight: '150px',
-                            overflowY: 'auto',
-                            marginBottom: '15px',
-                            whiteSpace: 'pre-wrap',
-                            color: '#475569'
-                          }}>
-                            {docDetails[doc.id].content}
-                          </div>
-                          
-                          <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#334155' }}>Database Chunks ({docDetails[doc.id].chunks?.length || 0}):</h4>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            {docDetails[doc.id].chunks?.map(chunk => (
-                              <div key={chunk.chunk_id} style={{
-                                backgroundColor: '#fff',
-                                padding: '10px',
-                                borderRadius: '6px',
-                                border: '1px solid #e2e8f0',
-                                fontSize: '12px',
-                                color: '#475569'
-                              }}>
-                                <span style={{ fontWeight: 'bold', marginRight: '5px', color: '#3b82f6' }}>#{chunk.chunk_id}</span>
-                                {chunk.chunk_text}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <p>Failed to load details.</p>
-                      )}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
