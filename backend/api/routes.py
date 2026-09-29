@@ -1,3 +1,4 @@
+from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from models.schemas import ChatRequest, ChatResponse
 from services.llm_service import get_chat_completion
@@ -181,12 +182,17 @@ async def get_all_chunks(limit: int = 100, offset: int = 0):
     try:
         conn = psycopg2.connect(settings.DATABASE_URL)
         cur = conn.cursor()
-        cur.execute("SELECT chunk_id, document_id, chunk_name, chunk_text FROM chunks ORDER BY chunk_id LIMIT %s OFFSET %s", (limit, offset))
+        cur.execute("""
+            SELECT c.chunk_id, c.document_id, c.chunk_name, c.chunk_text, d.filename 
+            FROM chunks c
+            JOIN documents d ON c.document_id = d.id
+            ORDER BY c.chunk_id LIMIT %s OFFSET %s
+        """, (limit, offset))
         rows = cur.fetchall()
         cur.close()
         conn.close()
         
-        chunks = [{"chunk_id": row[0], "document_id": row[1], "chunk_name": row[2], "chunk_text": row[3]} for row in rows]
+        chunks = [{"chunk_id": row[0], "document_id": row[1], "chunk_name": row[2], "chunk_text": row[3], "filename": row[4]} for row in rows]
         return {"chunks": chunks, "limit": limit, "offset": offset}
     except Exception as e:
         print(f"Error fetching all chunks: {e}")
@@ -266,3 +272,112 @@ async def get_document_content(doc_id: int):
         print(f"Error fetching document content: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch document content")
 
+
+class FileGroupCreate(BaseModel):
+    name: str
+
+class FileGroupAddDocument(BaseModel):
+    document_id: int
+
+@router.get("/file-groups")
+async def get_all_file_groups():
+    try:
+        conn = psycopg2.connect(settings.DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT id, name FROM file_groups ORDER BY id DESC")
+        groups = cur.fetchall()
+        
+        result = []
+        for g in groups:
+            group_id = g[0]
+            group_name = g[1]
+            cur.execute("""
+                SELECT d.id, d.filename 
+                FROM documents d
+                JOIN file_group_documents fgd ON d.id = fgd.document_id
+                WHERE fgd.group_id = %s
+            """, (group_id,))
+            docs = cur.fetchall()
+            documents = [{"id": d[0], "filename": d[1]} for d in docs]
+            result.append({"id": group_id, "name": group_name, "documents": documents})
+            
+        cur.close()
+        conn.close()
+        return {"file_groups": result}
+    except Exception as e:
+        print(f"Error fetching file groups: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch file groups")
+
+@router.post("/file-groups")
+async def create_file_group(group: FileGroupCreate):
+    try:
+        conn = psycopg2.connect(settings.DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("INSERT INTO file_groups (name) VALUES (%s) RETURNING id", (group.name,))
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"id": new_id, "name": group.name, "documents": []}
+    except psycopg2.IntegrityError:
+        raise HTTPException(status_code=400, detail="Group with this name already exists")
+    except Exception as e:
+        print(f"Error creating file group: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create file group")
+
+@router.delete("/file-groups/{group_id}")
+async def delete_file_group(group_id: int):
+    try:
+        conn = psycopg2.connect(settings.DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM file_groups WHERE id = %s RETURNING id", (group_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="File group not found")
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"status": "success", "message": "File group deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting file group: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete file group")
+
+@router.post("/file-groups/{group_id}/documents")
+async def add_document_to_group(group_id: int, payload: FileGroupAddDocument):
+    try:
+        conn = psycopg2.connect(settings.DATABASE_URL)
+        cur = conn.cursor()
+        # Verify document exists
+        cur.execute("SELECT id FROM documents WHERE id = %s", (payload.document_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Document not found")
+            
+        cur.execute("INSERT INTO file_group_documents (group_id, document_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", (group_id, payload.document_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"status": "success", "message": "Document added to group"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error adding document to group: {e}")
+        raise HTTPException(status_code=500, detail="Failed to add document to group")
+
+@router.delete("/file-groups/{group_id}/documents/{document_id}")
+async def remove_document_from_group(group_id: int, document_id: int):
+    try:
+        conn = psycopg2.connect(settings.DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM file_group_documents WHERE group_id = %s AND document_id = %s RETURNING group_id", (group_id, document_id))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Document not found in group")
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"status": "success", "message": "Document removed from group"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error removing document from group: {e}")
+        raise HTTPException(status_code=500, detail="Failed to remove document from group")

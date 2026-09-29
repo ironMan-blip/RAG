@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Database } from 'lucide-react';
+import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Database, Layers } from 'lucide-react';
 import './App.css';
 import DatabaseExplorer from './DatabaseExplorer';
+import ChunksExplorer from './ChunksExplorer';
 
 const BACKEND_URL = 'http://localhost:8000/api/chat';
 const UPLOAD_URL = 'http://localhost:8000/api/upload';
@@ -15,6 +16,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showDbModal, setShowDbModal] = useState(false);
+  const [showChunksModal, setShowChunksModal] = useState(false);
   const chatBoxRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -129,7 +131,15 @@ function App() {
               <span className="dot"></span> Online
             </span>
           </div>
-          <div className="header-actions" style={{ marginLeft: 'auto' }}>
+          <div className="header-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+            <button 
+              onClick={() => setShowChunksModal(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
+              title="View Chunks"
+            >
+              <Layers size={16} />
+              Chunks
+            </button>
             <button 
               onClick={() => setShowDbModal(true)}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
@@ -173,6 +183,10 @@ function App() {
 
         {showDbModal && (
           <DatabaseExplorer onClose={() => setShowDbModal(false)} documentsUrl={DOCUMENTS_URL} />
+        )}
+
+        {showChunksModal && (
+          <ChunksExplorer onClose={() => setShowChunksModal(false)} />
         )}
 
         <footer className="chat-input-area">
