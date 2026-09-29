@@ -31,19 +31,16 @@ def get_database_context() -> str:
             
         # Include file group (chunk) information
         cur.execute("""
-            SELECT fg.name, array_agg(d.filename)
+            SELECT fg.name, d.filename 
             FROM file_groups fg
-            LEFT JOIN file_group_documents fgd ON fg.id = fgd.group_id
-            LEFT JOIN documents d ON fgd.document_id = d.id
-            GROUP BY fg.name
+            JOIN file_group_documents fgd ON fg.id = fgd.group_id
+            JOIN documents d ON fgd.document_id = d.id
         """)
         group_rows = cur.fetchall()
         if group_rows:
             context += "\n--- File Groups (Chunks) ---\n"
-            for group_name, filenames in group_rows:
-                valid_files = [f for f in filenames if f is not None]
-                files_str = ", ".join(valid_files) if valid_files else "No files"
-                context += f"Chunk '{group_name}' contains files: {files_str}\n"
+            for group_name, filename in group_rows:
+                context += f"Chunk '{group_name}' contains file: {filename}\n"
         cur.close()
         conn.close()
     except Exception as e:
