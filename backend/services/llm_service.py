@@ -1,21 +1,5 @@
 from openai import OpenAI
 from core.config import settings
-import os
-import io
-
-try:
-    import pytesseract
-    from PIL import Image
-    TESSERACT_AVAILABLE = True
-except ImportError:
-    TESSERACT_AVAILABLE = False
-
-try:
-    import pypdf
-    PYPDF_AVAILABLE = True
-except ImportError:
-    PYPDF_AVAILABLE = False
-
 from core.database import get_db_connection
 
 def get_database_context() -> str:

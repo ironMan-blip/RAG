@@ -1,6 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from core.database import get_db_connection
+from services.chunk_service import (
+    get_all_chunks as fetch_all_chunks,
+    create_chunk as make_chunk,
+    delete_chunk as remove_chunk,
+    add_document_to_chunk as add_doc_to_chunk,
+    remove_document_from_chunk as remove_doc_from_chunk
+)
 
 router = APIRouter()
 
@@ -13,37 +19,7 @@ class ChunkAddDocument(BaseModel):
 @router.get("/chunks")
 async def get_all_chunks():
     try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT id, name FROM chunks ORDER BY id DESC")
-                groups = cur.fetchall()
-                
-                result = []
-                for chunk_id, chunk_name in groups:
-                    cur.execute("""
-                        SELECT d.id, d.filename 
-                        FROM documents d
-                        JOIN chunk_documents cd ON d.id = cd.document_id
-                        WHERE cd.chunk_id = %s
-                    """, (chunk_id,))
-                    docs = cur.fetchall()
-                    
-                    cur.execute("""
-                        SELECT d.id, d.filename 
-                        FROM documents d
-                        WHERE d.id NOT IN (
-                            SELECT document_id FROM chunk_documents WHERE chunk_id = %s
-                        )
-                    """, (chunk_id,))
-                    unadded_docs = cur.fetchall()
-                    
-                    result.append({
-                        "id": chunk_id, 
-                        "name": chunk_name, 
-                        "documents": [{"id": d[0], "filename": d[1]} for d in docs],
-                        "unadded_documents": [{"id": d[0], "filename": d[1]} for d in unadded_docs]
-                    })
-        return {"chunks": result}
+        return {"chunks": fetch_all_chunks()}
     except Exception as e:
         print(f"Error fetching chunks: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch chunks")
@@ -51,11 +27,7 @@ async def get_all_chunks():
 @router.post("/chunks")
 async def create_chunk(chunk: ChunkCreate):
     try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("INSERT INTO chunks (name) VALUES (%s) RETURNING id", (chunk.name,))
-                new_id = cur.fetchone()[0]
-                conn.commit()
+        new_id = make_chunk(chunk.name)
         return {"id": new_id, "name": chunk.name, "documents": []}
     except Exception as e:
         print(f"Error creating chunk: {e}")
@@ -64,13 +36,10 @@ async def create_chunk(chunk: ChunkCreate):
 @router.delete("/chunks/{chunk_id}")
 async def delete_chunk(chunk_id: int):
     try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM chunks WHERE id = %s RETURNING id", (chunk_id,))
-                if not cur.fetchone():
-                    raise HTTPException(status_code=404, detail="Chunk not found")
-                conn.commit()
-        return {"status": "success", "message": "Chunk deleted"}
+        success = remove_chunk(chunk_id)
+        if success:
+            return {"status": "success", "message": "Chunk deleted"}
+        raise HTTPException(status_code=404, detail="Chunk not found")
     except HTTPException:
         raise
     except Exception as e:
@@ -80,15 +49,10 @@ async def delete_chunk(chunk_id: int):
 @router.post("/chunks/{chunk_id}/documents")
 async def add_document_to_chunk(chunk_id: int, payload: ChunkAddDocument):
     try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM documents WHERE id = %s", (payload.document_id,))
-                if not cur.fetchone():
-                    raise HTTPException(status_code=404, detail="Document not found")
-                    
-                cur.execute("INSERT INTO chunk_documents (chunk_id, document_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", (chunk_id, payload.document_id))
-                conn.commit()
-        return {"status": "success", "message": "Document added to chunk"}
+        success = add_doc_to_chunk(chunk_id, payload.document_id)
+        if success:
+            return {"status": "success", "message": "Document added to chunk"}
+        raise HTTPException(status_code=404, detail="Document not found")
     except HTTPException:
         raise
     except Exception as e:
@@ -98,13 +62,10 @@ async def add_document_to_chunk(chunk_id: int, payload: ChunkAddDocument):
 @router.delete("/chunks/{chunk_id}/documents/{document_id}")
 async def remove_document_from_chunk(chunk_id: int, document_id: int):
     try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM chunk_documents WHERE chunk_id = %s AND document_id = %s RETURNING chunk_id", (chunk_id, document_id))
-                if not cur.fetchone():
-                    raise HTTPException(status_code=404, detail="Document not found in chunk")
-                conn.commit()
-        return {"status": "success", "message": "Document removed from chunk"}
+        success = remove_doc_from_chunk(chunk_id, document_id)
+        if success:
+            return {"status": "success", "message": "Document removed from chunk"}
+        raise HTTPException(status_code=404, detail="Document not found in chunk")
     except HTTPException:
         raise
     except Exception as e:
