@@ -95,7 +95,7 @@ def laya_decide_if_context_needed(message: str) -> bool:
     return probability_yes > 0.5
 
 @traceable
-def get_chat_completion(message: str, attached_filename: str = None) -> str:
+def get_chat_completion(message: str, attached_filename: str = None, model: str = None) -> str:
     """Sends a message to the AI and retrieves the reply, including database context."""
     db_context = ""
     needs_context = True if attached_filename else laya_decide_if_context_needed(message)
@@ -108,7 +108,7 @@ def get_chat_completion(message: str, attached_filename: str = None) -> str:
         system_prompt += f" Use the provided database context to answer the user's query.\n\nADDITIONAL DOCUMENTS/CONTEXT:\n{db_context}"
 
     response = client.chat.completions.create(
-        model=settings.LLM_MODEL,
+        model=model or settings.LLM_MODEL,
         messages=[
             {
                 "role": "system",

@@ -16,6 +16,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showDbModal, setShowDbModal] = useState(false);
+  const [selectedModel, setSelectedModel] = useState("nvidia/nemotron-3-ultra-550b-a55b:free");
 
   const chatBoxRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -84,7 +85,8 @@ function App() {
         },
         body: JSON.stringify({ 
           message: text || "",
-          attached_filename: attachedFilename 
+          attached_filename: attachedFilename,
+          model: selectedModel
         })
       });
 
@@ -129,7 +131,26 @@ function App() {
               <span className="dot"></span> Online
             </span>
           </div>
-          <div className="header-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+          <div className="header-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <select 
+              value={selectedModel} 
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="model-select"
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: '1px solid #ddd',
+                backgroundColor: '#fff',
+                fontSize: '14px',
+                outline: 'none',
+                cursor: 'pointer',
+                fontFamily: 'inherit'
+              }}
+            >
+              <option value="nvidia/nemotron-3-ultra-550b-a55b:free">Nvidia Nemotron Ultra 3</option>
+              <option value="google/gemini-pro">Gemini Pro</option>
+              <option value="meta-llama/llama-3-8b-instruct:free">Llama 3 8B</option>
+            </select>
             <button 
               onClick={() => setShowDbModal(true)}
               title="View Database"
