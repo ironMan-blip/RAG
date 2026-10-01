@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Database } from 'lucide-react';
+import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Database, ChevronDown, Check, Cpu } from 'lucide-react';
 import './App.css';
 import DatabaseExplorer from './DatabaseExplorer';
 
@@ -18,6 +18,19 @@ function App() {
   const [showDbModal, setShowDbModal] = useState(false);
   const [selectedModel, setSelectedModel] = useState("");
   const [availableModels, setAvailableModels] = useState([]);
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+
+  const modelDropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target)) {
+        setIsModelDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const chatBoxRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -145,27 +158,39 @@ function App() {
             </span>
           </div>
           <div className="header-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <select 
-              value={selectedModel} 
-              onChange={(e) => setSelectedModel(e.target.value)}
-              className="model-select"
-              style={{
-                padding: '6px 12px',
-                borderRadius: '6px',
-                border: '1px solid #ddd',
-                backgroundColor: '#fff',
-                fontSize: '14px',
-                outline: 'none',
-                cursor: 'pointer',
-                fontFamily: 'inherit'
-              }}
-            >
-              {availableModels.map(model => (
-                <option key={model.value} value={model.value}>
-                  {model.label}
-                </option>
-              ))}
-            </select>
+            <div className="custom-dropdown" ref={modelDropdownRef}>
+              <button 
+                className="dropdown-trigger" 
+                onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+              >
+                <Cpu size={16} className="dropdown-icon" />
+                <span className="dropdown-label">
+                  {availableModels.find(m => m.value === selectedModel)?.label || 'Select Model'}
+                </span>
+                <ChevronDown size={16} className={`dropdown-arrow ${isModelDropdownOpen ? 'open' : ''}`} />
+              </button>
+              
+              {isModelDropdownOpen && (
+                <div className="dropdown-menu">
+                  <div className="dropdown-header">Available Models</div>
+                  <div className="dropdown-list">
+                    {availableModels.map(model => (
+                      <button
+                        key={model.value}
+                        className={`dropdown-item ${selectedModel === model.value ? 'selected' : ''}`}
+                        onClick={() => {
+                          setSelectedModel(model.value);
+                          setIsModelDropdownOpen(false);
+                        }}
+                      >
+                        <span className="item-label">{model.label}</span>
+                        {selectedModel === model.value && <Check size={16} className="check-icon" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             <button 
               onClick={() => setShowDbModal(true)}
               title="View Database"
