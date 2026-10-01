@@ -74,7 +74,8 @@ def get_document_names() -> str:
                 cur.execute("SELECT filename FROM documents")
                 rows = cur.fetchall()
                 if rows:
-                    return ", ".join([row[0] for row in rows])
+                    numbered_list = "\n".join([f"{i+1}. {row[0]}" for i, row in enumerate(rows)])
+                    return f"\n{numbered_list}"
     except Exception as e:
         print(f"Error fetching document names: {e}")
     return "None"
@@ -97,10 +98,10 @@ def laya_decide_if_context_needed(message: str) -> bool:
             }
         }
     }
-    
-    result = laya_router.predict({"request": message, "available_documents": doc_names}, questions)
+
+    result = laya_router.predict({"user_messege": message, "available_documents_in_db": doc_names}, questions)
     probability_yes = result["answers"]["needs_context"]["noul"]
-    print("probability_yes", probability_yes*100, "%")
+    print(result)
     return probability_yes > 0.5
 
 @traceable
