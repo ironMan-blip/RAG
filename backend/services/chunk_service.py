@@ -1,10 +1,8 @@
 from core.database import get_db_connection
+from core.ml import embedder
+
 try:
-    from sentence_transformers import SentenceTransformer
     from langchain_text_splitters import RecursiveCharacterTextSplitter
-    
-    # Load model (dimension 384)
-    embedder = SentenceTransformer('all-MiniLM-L6-v2')
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200,
@@ -12,7 +10,6 @@ try:
         is_separator_regex=False,
     )
 except ImportError:
-    embedder = None
     text_splitter = None
 
 def create_chunks_for_document(doc_id: int, text: str):

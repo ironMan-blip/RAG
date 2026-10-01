@@ -1,6 +1,5 @@
 import io
 import hashlib
-from fastapi import HTTPException
 from core.database import get_db_connection
 
 try:
