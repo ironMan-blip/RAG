@@ -102,6 +102,23 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
     if db_context:
         system_prompt += f" Use the provided database context to answer the user's query.\n\nADDITIONAL DOCUMENTS/CONTEXT:\n{db_context}"
 
+    if session_id:
+        try:
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT user_message, bot_reply FROM chat_history WHERE session_id = %s ORDER BY created_at DESC LIMIT 5",
+                        (session_id,)
+                    )
+                    rows = cur.fetchall()
+                    if rows:
+                        rows.reverse()  # chronological order
+                        system_prompt += "\n\nPREVIOUS CHAT HISTORY (Last 5 messages):\n"
+                        for row in rows:
+                            system_prompt += f"User: {row[0]}\nAI: {row[1]}\n"
+        except Exception as e:
+            print(f"Error fetching chat history for system prompt: {e}")
+
     response = client.chat.completions.create(
         model=model or settings.LLM_MODEL1,
         messages=[
