@@ -67,16 +67,30 @@ client = wrappers.wrap_openai(OpenAI(
   api_key=settings.OPENROUTER_API_KEY,
 ))
 
+def get_document_names() -> str:
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT filename FROM documents")
+                rows = cur.fetchall()
+                if rows:
+                    return ", ".join([row[0] for row in rows])
+    except Exception as e:
+        print(f"Error fetching document names: {e}")
+    return "None"
+
 @traceable
 def laya_decide_if_context_needed(message: str) -> bool:
     """Uses Laya to decide if external documents are needed for this query."""
     if laya_router is None:
         return True
 
+    doc_names = get_document_names()
+
     questions = {
         "needs_context": {
             "type": "noul", 
-            "instructions": "Does `request` require looking up facts, data, or external documents?",
+            "instructions": "Does `request` require looking up facts, data, or external documents? The following documents are available in the database: `available_documents`.",
             "criteria": {
                 "false": "casual greetings, conversational chat, or statements that require no context",
                 "true": "factual queries or questions that need external documents"
@@ -84,7 +98,7 @@ def laya_decide_if_context_needed(message: str) -> bool:
         }
     }
     
-    result = laya_router.predict({"request": message}, questions)
+    result = laya_router.predict({"request": message, "available_documents": doc_names}, questions)
     probability_yes = result["answers"]["needs_context"]["noul"]
     print("probability_yes", probability_yes*100, "%")
     return probability_yes > 0.5
