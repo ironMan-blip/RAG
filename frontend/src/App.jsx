@@ -16,7 +16,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showDbModal, setShowDbModal] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("nvidia/nemotron-3-ultra-550b-a55b:free");
+  const [selectedModel, setSelectedModel] = useState("");
+  const [availableModels, setAvailableModels] = useState([]);
 
   const chatBoxRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -39,6 +40,18 @@ function App() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    fetch('http://localhost:8000/api/models')
+      .then(res => res.json())
+      .then(data => {
+        if (data.models && data.models.length > 0) {
+          setAvailableModels(data.models);
+          setSelectedModel(data.models[0].value);
+        }
+      })
+      .catch(err => console.error("Failed to fetch models:", err));
+  }, []);
 
   const sendMessage = async () => {
     const text = inputValue.trim();
@@ -147,9 +160,11 @@ function App() {
                 fontFamily: 'inherit'
               }}
             >
-              <option value="nvidia/nemotron-3-ultra-550b-a55b:free">Nvidia Nemotron Ultra 3</option>
-              <option value="google/gemini-pro">Gemini Pro</option>
-              <option value="meta-llama/llama-3-8b-instruct:free">Llama 3 8B</option>
+              {availableModels.map(model => (
+                <option key={model.value} value={model.value}>
+                  {model.label}
+                </option>
+              ))}
             </select>
             <button 
               onClick={() => setShowDbModal(true)}

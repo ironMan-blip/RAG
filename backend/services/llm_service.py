@@ -3,12 +3,7 @@ from langsmith import traceable, wrappers
 from core.config import settings
 from core.database import get_db_connection
 
-try:
-    from sentence_transformers import SentenceTransformer
-    embedder = SentenceTransformer('all-MiniLM-L6-v2')
-except ImportError:
-    embedder = None
-    print("sentence_transformers not installed.")
+from core.ml import embedder
 
 try:
     from laya import Router
