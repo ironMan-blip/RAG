@@ -98,9 +98,9 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
     if needs_context:
         db_context = get_database_context(message, attached_filename)
     
-    system_prompt = "You are a very helpful AI assistant."
+    system_prompt = "<role>\nYou are a very helpful AI assistant.\n</role>"
     if db_context:
-        system_prompt += f" Use the provided database context to answer the user's query.\n\nADDITIONAL DOCUMENTS/CONTEXT:\n{db_context}"
+        system_prompt += f"\n<context>Use these provided database context to answer the user's query.\n\nDOCUMENT CONTEXT:\n{db_context} \n</context>"
 
     if session_id:
         try:
@@ -113,9 +113,11 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
                     rows = cur.fetchall()
                     if rows:
                         rows.reverse()  # chronological order
-                        system_prompt += "\n\nPREVIOUS CHAT HISTORY (Last 5 messages):\n"
+                        system_prompt += "\n\n <chat_history>\n PREVIOUS CHAT HISTORY (Last 5 messages):\n"
                         for row in rows:
-                            system_prompt += f"User: {row[0]}\nAI: {row[1]}\n"
+                            system_prompt += f"\nUser: {row[0]}\nAI: {row[1]}\n"
+
+                        system_prompt += "\n </chat_history>\n"
         except Exception as e:
             print(f"Error fetching chat history for system prompt: {e}")
 
