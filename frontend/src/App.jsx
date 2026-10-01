@@ -217,7 +217,7 @@ function App() {
                 onClick={() => loadChat(session.id)}
               >
                 <Clock size={16} className="history-icon" />
-                <span className="chat-id" title={session.id}>{session.id.substring(0, 8)}...</span>
+                <span className="chat-id" title={session.id}>{session.name || session.id.substring(0, 8) + '...'}</span>
                 <button className="delete-btn" onClick={(e) => deleteChat(session.id, e)}>
                   <Trash2 size={14} />
                 </button>

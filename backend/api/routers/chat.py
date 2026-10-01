@@ -40,9 +40,9 @@ async def get_chats():
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT id, created_at FROM chats ORDER BY created_at DESC")
+                cur.execute("SELECT id, name, created_at FROM chats ORDER BY created_at DESC")
                 rows = cur.fetchall()
-                return {"chats": [{"id": row[0], "created_at": row[1]} for row in rows]}
+                return {"chats": [{"id": row[0], "name": row[1], "created_at": row[2]} for row in rows]}
     except Exception as e:
         print(f"Error getting chats: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")

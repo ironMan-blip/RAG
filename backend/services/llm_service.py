@@ -131,13 +131,22 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 if session_id:
-                    # Insert session if it doesn't exist
-                    cur.execute("INSERT INTO chats (id) VALUES (%s) ON CONFLICT DO NOTHING", (session_id,))
-                
-                cur.execute(
-                    "INSERT INTO chat_history (session_id, user_message, bot_reply, model) VALUES (%s, %s, %s, %s)",
-                    (session_id, message, bot_reply, model or settings.LLM_MODEL1)
-                )
+                    cur.execute("SELECT id FROM chats WHERE id = %s", (session_id,))
+                    if not cur.fetchone():
+                        try:
+                            title_response = client.chat.completions.create(
+                                model="google/gemini-flash-1.5-8b", # Fast model for titles
+                                messages=[{"role": "user", "content": f"Summarize this prompt in 3-5 words for a chat title. Output only the title, no quotes or other text:\n{message}"}],
+                            )
+                            chat_title = title_response.choices[0].message.content.strip().strip('"')
+                        except Exception:
+                            chat_title = message[:30] + "..." if len(message) > 30 else message
+                        cur.execute("INSERT INTO chats (id, name) VALUES (%s, %s)", (session_id, chat_title))
+                        
+                    cur.execute(
+                        "INSERT INTO chat_history (session_id, user_message, bot_reply, model) VALUES (%s, %s, %s, %s)",
+                        (session_id, message, bot_reply, model or settings.LLM_MODEL1)
+                    )
             conn.commit()
     except Exception as e:
         print(f"Error saving chat history: {e}")
