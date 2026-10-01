@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Database, ChevronDown, Check, Cpu } from 'lucide-react';
+import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Database, ChevronDown, Check, Cpu, MessageSquarePlus } from 'lucide-react';
 import './App.css';
 import DatabaseExplorer from './DatabaseExplorer';
 
@@ -34,6 +34,12 @@ function App() {
 
   const chatBoxRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  const startNewChat = () => {
+    setMessages([{ text: "Hello! I'm your AI assistant. How can I help you today?", sender: "bot" }]);
+    setInputValue("");
+    setSelectedFile(null);
+  };
 
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
@@ -158,6 +164,14 @@ function App() {
             </span>
           </div>
           <div className="header-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button 
+              onClick={startNewChat}
+              title="New Chat"
+              className="icon-btn"
+              aria-label="New Chat"
+            >
+              <MessageSquarePlus size={18} />
+            </button>
             <div className="custom-dropdown" ref={modelDropdownRef}>
               <button 
                 className="dropdown-trigger" 

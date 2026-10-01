@@ -125,4 +125,17 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
             error_msg = str(error_info)
         return f"⚠️ **AI Provider Error**: {error_msg}"
         
-    return response.choices[0].message.content
+    bot_reply = response.choices[0].message.content
+    
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO chat_history (user_message, bot_reply, model) VALUES (%s, %s, %s)",
+                    (message, bot_reply, model or settings.LLM_MODEL1)
+                )
+            conn.commit()
+    except Exception as e:
+        print(f"Error saving chat history: {e}")
+
+    return bot_reply

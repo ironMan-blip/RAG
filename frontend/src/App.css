@@ -556,3 +556,11 @@ body {
   flex-shrink: 0;
 }
 
+
+
+.header-actions .icon-btn {
+  padding: 8px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
