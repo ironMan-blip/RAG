@@ -103,7 +103,7 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
         system_prompt += f" Use the provided database context to answer the user's query.\n\nADDITIONAL DOCUMENTS/CONTEXT:\n{db_context}"
 
     response = client.chat.completions.create(
-        model=model or settings.LLM_MODEL,
+        model=model or settings.LLM_MODEL1,
         messages=[
             {
                 "role": "system",
