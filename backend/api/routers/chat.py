@@ -8,7 +8,7 @@ router = APIRouter()
 async def chat_endpoint(req: ChatRequest):
     try:
         final_message = req.message
-        bot_reply = get_chat_completion(final_message, attached_filename=req.attached_filename, model=req.model)
+        bot_reply = get_chat_completion(final_message, attached_filename=req.attached_filename, model=req.model, session_id=req.session_id)
         return ChatResponse(reply=bot_reply)
     except Exception as e:
         print(f"Error during AI request: {e}")

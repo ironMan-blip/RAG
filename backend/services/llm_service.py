@@ -90,7 +90,7 @@ def laya_decide_if_context_needed(message: str) -> bool:
     return probability_yes > 0.5
 
 @traceable
-def get_chat_completion(message: str, attached_filename: str = None, model: str = None) -> str:
+def get_chat_completion(message: str, attached_filename: str = None, model: str = None, session_id: str = None) -> str:
     """Sends a message to the AI and retrieves the reply, including database context."""
     db_context = ""
     needs_context = True if attached_filename else laya_decide_if_context_needed(message)
@@ -130,9 +130,13 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                if session_id:
+                    # Insert session if it doesn't exist
+                    cur.execute("INSERT INTO chats (id) VALUES (%s) ON CONFLICT DO NOTHING", (session_id,))
+                
                 cur.execute(
-                    "INSERT INTO chat_history (user_message, bot_reply, model) VALUES (%s, %s, %s)",
-                    (message, bot_reply, model or settings.LLM_MODEL1)
+                    "INSERT INTO chat_history (session_id, user_message, bot_reply, model) VALUES (%s, %s, %s, %s)",
+                    (session_id, message, bot_reply, model or settings.LLM_MODEL1)
                 )
             conn.commit()
     except Exception as e:

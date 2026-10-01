@@ -19,6 +19,7 @@ function App() {
   const [selectedModel, setSelectedModel] = useState("");
   const [availableModels, setAvailableModels] = useState([]);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const [chatId, setChatId] = useState(crypto.randomUUID());
 
   const modelDropdownRef = useRef(null);
 
@@ -39,6 +40,7 @@ function App() {
     setMessages([{ text: "Hello! I'm your AI assistant. How can I help you today?", sender: "bot" }]);
     setInputValue("");
     setSelectedFile(null);
+    setChatId(crypto.randomUUID());
   };
 
   const handleFileSelect = (event) => {
@@ -118,7 +120,8 @@ function App() {
         body: JSON.stringify({ 
           message: text || "",
           attached_filename: attachedFilename,
-          model: selectedModel
+          model: selectedModel,
+          session_id: chatId
         })
       });
 
