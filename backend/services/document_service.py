@@ -37,7 +37,7 @@ def extract_text(content: bytes, content_type: str) -> str:
             extracted_text = f"[PDF Parsing Failed: {e}]"
     return extracted_text
 
-def process_and_save_document(file_name: str, content: bytes, content_type: str, source_id: str) -> tuple[str, str]:
+def process_and_save_document(file_name: str, content: bytes, content_type: str, source_id: str, session_id: str = None) -> tuple[str, str]:
     file_hash = hashlib.sha256(content).hexdigest()
     file_exists = False
     
@@ -62,8 +62,8 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "INSERT INTO documents (filename, file_hash, source_id) VALUES (%s, %s, %s) ON CONFLICT (filename) DO UPDATE SET file_hash = EXCLUDED.file_hash, source_id = EXCLUDED.source_id RETURNING id",
-                        (file_name, file_hash, source_id)
+                        "INSERT INTO documents (filename, file_hash, source_id, session_id) VALUES (%s, %s, %s, %s) ON CONFLICT (filename) DO UPDATE SET file_hash = EXCLUDED.file_hash, source_id = EXCLUDED.source_id, session_id = EXCLUDED.session_id RETURNING id",
+                        (file_name, file_hash, source_id, session_id)
                     )
                     doc_id = cur.fetchone()[0]
                     conn.commit()
@@ -76,15 +76,24 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
             
     return upload_message, extracted_text.strip()
 
-def get_all_documents():
+def get_all_documents(session_id: str = None):
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT d.id, d.filename, d.file_hash, s.source_name 
-                FROM documents d 
-                LEFT JOIN source s ON d.source_id = s.uuid 
-                ORDER BY d.id DESC
-            """)
+            if session_id:
+                cur.execute("""
+                    SELECT d.id, d.filename, d.file_hash, s.source_name 
+                    FROM documents d 
+                    LEFT JOIN source s ON d.source_id = s.uuid 
+                    WHERE d.session_id IS NULL OR d.session_id = %s
+                    ORDER BY d.id DESC
+                """, (session_id,))
+            else:
+                cur.execute("""
+                    SELECT d.id, d.filename, d.file_hash, s.source_name 
+                    FROM documents d 
+                    LEFT JOIN source s ON d.source_id = s.uuid 
+                    ORDER BY d.id DESC
+                """)
             rows = cur.fetchall()
     return [{"id": r[0], "filename": r[1], "file_hash": r[2], "tag": r[3] or "unknown"} for r in rows]
 

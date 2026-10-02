@@ -20,6 +20,9 @@ async def chat_endpoint(
         attached_filename = None
         final_message = message
         
+        if not session_id or session_id == "null" or session_id == "undefined":
+            session_id = str(uuid.uuid4())
+            
         if file and file.filename:
             content = await file.read()
             upload_message, extracted_text = await run_in_threadpool(
@@ -27,7 +30,8 @@ async def chat_endpoint(
                 file.filename, 
                 content, 
                 file.content_type, 
-                '20a26963-d20c-469f-8837-620321d589a6'
+                '20a26963-d20c-469f-8837-620321d589a6',
+                session_id
             )
             attached_filename = file.filename
             
@@ -37,9 +41,6 @@ async def chat_endpoint(
             else:
                 final_message = f"[Attached File: {file.filename}]"
         
-        if not session_id or session_id == "null" or session_id == "undefined":
-            session_id = str(uuid.uuid4())
-            
         bot_reply = await run_in_threadpool(get_chat_completion, final_message, attached_filename, model, session_id)
         return ChatResponse(reply=bot_reply, session_id=session_id)
     except Exception as e:

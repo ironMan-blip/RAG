@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS documents (
     id SERIAL PRIMARY KEY,
     filename VARCHAR(255) UNIQUE NOT NULL,
     file_hash VARCHAR(255),
-    source_id VARCHAR(255) REFERENCES source(uuid)
+    source_id VARCHAR(255) REFERENCES source(uuid),
+    session_id VARCHAR(255)
 );
 
 CREATE TABLE IF NOT EXISTS chunks (

@@ -12,14 +12,14 @@ client = wrappers.wrap_openai(OpenAI(
   api_key=settings.OPENROUTER_API_KEY,
 ))
 
-def get_document_names_str() -> str:
-    docs = get_all_documents()
+def get_document_names_str(session_id: str = None) -> str:
+    docs = get_all_documents(session_id)
     if not docs:
         return "None"
     return "\n".join([f"{i+1}. {doc['filename']}" for i, doc in enumerate(docs)])
 
 @traceable
-def get_database_context(query: str, attached_filename: str = None) -> str:
+def get_database_context(query: str, attached_filename: str = None, session_id: str = None) -> str:
     if embedder is None:
         return ""
     context = ""
@@ -44,9 +44,10 @@ def get_database_context(query: str, attached_filename: str = None) -> str:
                         SELECT c.chunk_text, d.filename 
                         FROM chunks c
                         JOIN documents d ON c.doc_id = d.id
+                        WHERE d.session_id IS NULL OR d.session_id = %s
                         ORDER BY c.chunk_embedding <-> %s::vector
                         LIMIT 5
-                    """, (query_embedding,))
+                    """, (session_id, query_embedding))
                 
                 rows = cur.fetchall()
                 if rows:
@@ -61,7 +62,7 @@ def get_database_context(query: str, attached_filename: str = None) -> str:
 @traceable
 def jev_decide_if_context_needed(message: str, session_id: str = None) -> bool:
     """Uses Jev to decide if external documents are needed for this query."""
-    doc_names = get_document_names_str()
+    doc_names = get_document_names_str(session_id)
     
     chat_history_str = "None"
     if session_id:
@@ -120,7 +121,7 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
     needs_context = True if attached_filename else jev_decide_if_context_needed(message, session_id)
     
     if needs_context:
-        db_context = get_database_context(message, attached_filename)
+        db_context = get_database_context(message, attached_filename, session_id)
     
     system_prompt = "You are a very helpful AI assistant."
     if db_context:
