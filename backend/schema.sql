@@ -25,3 +25,8 @@ CREATE TABLE IF NOT EXISTS chat_history (
     model TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS source (
+    uuid VARCHAR(255) PRIMARY KEY,
+    source_name VARCHAR(255) NOT NULL
+);
