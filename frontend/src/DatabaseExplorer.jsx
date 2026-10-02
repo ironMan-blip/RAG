@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { X, FileText, Database as DatabaseIcon, Trash2, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, FileText, Database as DatabaseIcon, Trash2, AlertTriangle, Upload } from 'lucide-react';
 
-export default function DatabaseExplorer({ onClose, documentsUrl }) {
+export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [documentToDelete, setDocumentToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetchDocuments();
@@ -13,7 +15,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl }) {
 
   const fetchDocuments = async () => {
     try {
-      const res = await fetch(documentsUrl);
+      const res = await fetch(documentsUrl, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setDocuments(data.documents || []);
@@ -49,6 +51,36 @@ export default function DatabaseExplorer({ onClose, documentsUrl }) {
     }
   };
 
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const res = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        await fetchDocuments();
+      } else {
+        alert("Failed to upload document.");
+      }
+    } catch (error) {
+      console.error("Failed to upload document", error);
+      alert("Error uploading document.");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
   return (
     <div style={{
       position: 'fixed',
@@ -80,9 +112,37 @@ export default function DatabaseExplorer({ onClose, documentsUrl }) {
             <DatabaseIcon size={24} color="#111111" />
             Database Explorer
           </h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '5px' }}>
-            <X size={24} color="#64748b" />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              style={{ display: 'none' }} 
+              onChange={handleFileUpload} 
+            />
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 12px',
+                backgroundColor: '#3b82f6',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: isUploading ? 'not-allowed' : 'pointer',
+                opacity: isUploading ? 0.7 : 1,
+                fontSize: '0.875rem'
+              }}
+            >
+              <Upload size={16} />
+              {isUploading ? 'Uploading...' : 'Upload File'}
+            </button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '5px' }}>
+              <X size={24} color="#64748b" />
+            </button>
+          </div>
         </div>
 
         <div style={{ padding: '20px', overflowY: 'auto', flex: 1, backgroundColor: '#f8fafc' }}>

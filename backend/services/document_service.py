@@ -1,6 +1,7 @@
 import io
 import hashlib
 from core.database import get_db_connection
+from services.chunk_service import create_chunks_for_document, delete_chunks_for_document
 
 try:
     import pytesseract
@@ -67,7 +68,6 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str)
                     doc_id = cur.fetchone()[0]
                     conn.commit()
             
-            from services.chunk_service import create_chunks_for_document
             create_chunks_for_document(doc_id, extracted_text.strip())
             
             upload_message += " and saved to database"
@@ -85,7 +85,6 @@ def get_all_documents():
 
 def delete_document(doc_id: int) -> bool:
     try:
-        from services.chunk_service import delete_chunks_for_document
         delete_chunks_for_document(doc_id)
     except Exception as e:
         print(f"Failed to delete chunks: {e}")

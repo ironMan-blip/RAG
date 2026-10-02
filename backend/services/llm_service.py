@@ -126,9 +126,11 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
     if db_context:
         system_prompt += f"\n\nYou have been provided with relevant document excerpts below. You MUST use them to answer the user's query. Even if the user asks you to summarize a file they attached or mentioned, DO NOT say you cannot see it. Assume the context below is the file they are referring to.\n\nDOCUMENT CONTEXT:\n{db_context}\n" 
 
+    is_new_chat = True
     if session_id:
         history = get_recent_chat_history(session_id, limit=5)
         if history:
+            is_new_chat = False
             system_prompt += "\n\n <chat_history>\n PREVIOUS CHAT HISTORY (Last 5 messages):\n"
             for row in history:
                 system_prompt += f"\nUser: {row[0]}\nAI: {row[1]}\n"
@@ -152,7 +154,10 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
     bot_reply = response.choices[0].message.content
     
     if session_id:
-        chat_title = generate_chat_title(message)
-        save_chat_history(session_id, message, bot_reply, used_model, chat_title)
+        import threading
+        def save_history_bg():
+            chat_title = generate_chat_title(message) if is_new_chat else None
+            save_chat_history(session_id, message, bot_reply, used_model, chat_title)
+        threading.Thread(target=save_history_bg).start()
 
     return bot_reply
