@@ -170,9 +170,17 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <FileText size={20} color="#111111" style={{ marginRight: '10px' }} />
                       <div>
-                        <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{doc.filename}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
-                          Uploaded from: {doc.tag}
+                        <div style={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '6px' }}>{doc.filename}</div>
+                        <div style={{
+                          display: 'inline-block',
+                          fontSize: '0.7rem',
+                          fontWeight: '600',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          backgroundColor: doc.tag?.includes('chat') ? '#e0e7ff' : doc.tag?.includes('library') ? '#dcfce7' : '#f1f5f9',
+                          color: doc.tag?.includes('chat') ? '#4f46e5' : doc.tag?.includes('library') ? '#16a34a' : '#64748b'
+                        }}>
+                          {doc.tag?.includes('chat') ? 'Chat Interface' : doc.tag?.includes('library') ? 'Library' : doc.tag || 'Unknown'}
                         </div>
                       </div>
                     </div>
