@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.concurrency import run_in_threadpool
 from services.document_service import (
     process_and_save_document,
@@ -9,7 +9,7 @@ from services.document_service import (
 router = APIRouter()
 
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), source_id: str = Form('79279d88-e2c3-4a36-9da6-3f02dd71796b')):
     try:
         content = await file.read()
         upload_message, extracted_text = await run_in_threadpool(
@@ -17,7 +17,7 @@ async def upload_file(file: UploadFile = File(...)):
             file.filename, 
             content, 
             file.content_type, 
-            '79279d88-e2c3-4a36-9da6-3f02dd71796b'
+            source_id
         )
         return {"filename": file.filename, "status": "success", "message": upload_message, "extracted_text": extracted_text}
     except Exception as e:

@@ -7,7 +7,8 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
   const [documentToDelete, setDocumentToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef(null);
+  const libraryInputRef = useRef(null);
+  const toolsInputRef = useRef(null);
 
   useEffect(() => {
     fetchDocuments();
@@ -51,7 +52,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
     }
   };
 
-  const handleFileUpload = async (event) => {
+  const handleFileUpload = async (event, sourceId) => {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -59,6 +60,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      if (sourceId) formData.append('source_id', sourceId);
       
       const res = await fetch(uploadUrl, {
         method: 'POST',
@@ -75,9 +77,8 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
       alert("Error uploading document.");
     } finally {
       setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (libraryInputRef.current) libraryInputRef.current.value = "";
+      if (toolsInputRef.current) toolsInputRef.current.value = "";
     }
   };
 
@@ -115,12 +116,18 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <input 
               type="file" 
-              ref={fileInputRef} 
+              ref={libraryInputRef} 
               style={{ display: 'none' }} 
-              onChange={handleFileUpload} 
+              onChange={(e) => handleFileUpload(e, '79279d88-e2c3-4a36-9da6-3f02dd71796b')} 
+            />
+            <input 
+              type="file" 
+              ref={toolsInputRef} 
+              style={{ display: 'none' }} 
+              onChange={(e) => handleFileUpload(e, 'b8118424-5418-47b7-a661-8bb768aa8ef5')} 
             />
             <button 
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => libraryInputRef.current?.click()}
               disabled={isUploading}
               style={{
                 display: 'flex',
@@ -137,7 +144,27 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
               }}
             >
               <Upload size={16} />
-              {isUploading ? 'Uploading...' : 'Upload File'}
+              {isUploading ? 'Uploading...' : 'Upload files for library'}
+            </button>
+            <button 
+              onClick={() => toolsInputRef.current?.click()}
+              disabled={isUploading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 12px',
+                backgroundColor: '#10b981',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: isUploading ? 'not-allowed' : 'pointer',
+                opacity: isUploading ? 0.7 : 1,
+                fontSize: '0.875rem'
+              }}
+            >
+              <Upload size={16} />
+              {isUploading ? 'Uploading...' : 'Upload files for tools'}
             </button>
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '5px' }}>
               <X size={24} color="#64748b" />
@@ -177,10 +204,10 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
                           fontWeight: '600',
                           padding: '2px 8px',
                           borderRadius: '12px',
-                          backgroundColor: doc.tag?.includes('chat') ? '#e0e7ff' : doc.tag?.includes('library') ? '#dcfce7' : '#f1f5f9',
-                          color: doc.tag?.includes('chat') ? '#4f46e5' : doc.tag?.includes('library') ? '#16a34a' : '#64748b'
+                          backgroundColor: doc.tag?.includes('chat') ? '#e0e7ff' : doc.tag?.includes('library') ? '#dcfce7' : doc.tag?.includes('tools') ? '#fef3c7' : '#f1f5f9',
+                          color: doc.tag?.includes('chat') ? '#4f46e5' : doc.tag?.includes('library') ? '#16a34a' : doc.tag?.includes('tools') ? '#d97706' : '#64748b'
                         }}>
-                          {doc.tag?.includes('chat') ? 'Chat Interface' : doc.tag?.includes('library') ? 'Library' : doc.tag || 'Unknown'}
+                          {doc.tag?.includes('chat') ? 'Chat Interface' : doc.tag?.includes('library') ? 'Library' : doc.tag?.includes('tools') ? 'Tools' : doc.tag || 'Unknown'}
                         </div>
                       </div>
                     </div>
