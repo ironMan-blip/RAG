@@ -169,7 +169,12 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
                   >
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <FileText size={20} color="#111111" style={{ marginRight: '10px' }} />
-                      <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{doc.filename}</div>
+                      <div>
+                        <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{doc.filename}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                          Uploaded from: {doc.tag}
+                        </div>
+                      </div>
                     </div>
                     <button 
                       onClick={() => handleDeleteClick(doc)}

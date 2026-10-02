@@ -79,9 +79,14 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
 def get_all_documents():
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, filename, file_hash FROM documents ORDER BY id DESC")
+            cur.execute("""
+                SELECT d.id, d.filename, d.file_hash, s.source_name 
+                FROM documents d 
+                LEFT JOIN source s ON d.source_id = s.uuid 
+                ORDER BY d.id DESC
+            """)
             rows = cur.fetchall()
-    return [{"id": r[0], "filename": r[1], "file_hash": r[2]} for r in rows]
+    return [{"id": r[0], "filename": r[1], "file_hash": r[2], "tag": r[3] or "unknown"} for r in rows]
 
 def delete_document(doc_id: int) -> bool:
     try:
