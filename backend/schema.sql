@@ -1,3 +1,10 @@
+CREATE TABLE IF NOT EXISTS documents (
+    id SERIAL PRIMARY KEY,
+    filename VARCHAR(255) UNIQUE NOT NULL,
+    content TEXT NOT NULL,
+    file_hash VARCHAR(255)
+);
+
 CREATE TABLE IF NOT EXISTS chunks (
     chunk_id SERIAL PRIMARY KEY,
     doc_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
