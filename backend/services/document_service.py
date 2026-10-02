@@ -61,8 +61,8 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str)
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "INSERT INTO documents (filename, content, file_hash) VALUES (%s, %s, %s) ON CONFLICT (filename) DO UPDATE SET content = EXCLUDED.content, file_hash = EXCLUDED.file_hash RETURNING id",
-                        (file_name, extracted_text.strip(), file_hash)
+                        "INSERT INTO documents (filename, file_hash) VALUES (%s, %s) ON CONFLICT (filename) DO UPDATE SET file_hash = EXCLUDED.file_hash RETURNING id",
+                        (file_name, file_hash)
                     )
                     doc_id = cur.fetchone()[0]
                     conn.commit()

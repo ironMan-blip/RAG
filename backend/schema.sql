@@ -1,7 +1,6 @@
 CREATE TABLE IF NOT EXISTS documents (
     id SERIAL PRIMARY KEY,
     filename VARCHAR(255) UNIQUE NOT NULL,
-    content TEXT NOT NULL,
     file_hash VARCHAR(255)
 );
 
