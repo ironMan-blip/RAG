@@ -30,3 +30,9 @@ CREATE TABLE IF NOT EXISTS source (
     uuid VARCHAR(255) PRIMARY KEY,
     source_name VARCHAR(255) NOT NULL
 );
+
+INSERT INTO source (uuid, source_name) 
+VALUES 
+    ('20a26963-d20c-469f-8837-620321d589a6', 'files attached from chat interface'),
+    ('79279d88-e2c3-4a36-9da6-3f02dd71796b', 'files directly attached from library')
+ON CONFLICT (uuid) DO NOTHING;
