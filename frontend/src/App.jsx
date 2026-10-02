@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Database, ChevronDown, Check, Cpu, MessageSquarePlus, Menu, Trash2, Clock } from 'lucide-react';
+import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Library, ChevronDown, Check, Cpu, MessageSquarePlus, Menu, Trash2, Clock } from 'lucide-react';
 import './App.css';
 import DatabaseExplorer from './DatabaseExplorer';
 
@@ -261,10 +261,10 @@ function App() {
             </div>
             <button 
               onClick={() => setShowDbModal(true)}
-              title="View Database"
+              title="View Library"
             >
-              <Database size={16} />
-              Database
+              <Library size={16} />
+              Library
             </button>
           </div>
         </header>
