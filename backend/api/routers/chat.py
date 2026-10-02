@@ -22,7 +22,13 @@ async def chat_endpoint(
         
         if file and file.filename:
             content = await file.read()
-            upload_message, extracted_text = await run_in_threadpool(process_and_save_document, file.filename, content, file.content_type)
+            upload_message, extracted_text = await run_in_threadpool(
+                process_and_save_document, 
+                file.filename, 
+                content, 
+                file.content_type, 
+                '20a26963-d20c-469f-8837-620321d589a6'
+            )
             attached_filename = file.filename
             
             # Format message with file context logic moved to backend

@@ -12,7 +12,13 @@ router = APIRouter()
 async def upload_file(file: UploadFile = File(...)):
     try:
         content = await file.read()
-        upload_message, extracted_text = await run_in_threadpool(process_and_save_document, file.filename, content, file.content_type)
+        upload_message, extracted_text = await run_in_threadpool(
+            process_and_save_document, 
+            file.filename, 
+            content, 
+            file.content_type, 
+            '79279d88-e2c3-4a36-9da6-3f02dd71796b'
+        )
         return {"filename": file.filename, "status": "success", "message": upload_message, "extracted_text": extracted_text}
     except Exception as e:
         print(f"File upload failed: {e}")

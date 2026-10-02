@@ -37,7 +37,7 @@ def extract_text(content: bytes, content_type: str) -> str:
             extracted_text = f"[PDF Parsing Failed: {e}]"
     return extracted_text
 
-def process_and_save_document(file_name: str, content: bytes, content_type: str) -> tuple[str, str]:
+def process_and_save_document(file_name: str, content: bytes, content_type: str, source_id: str) -> tuple[str, str]:
     file_hash = hashlib.sha256(content).hexdigest()
     file_exists = False
     
@@ -62,8 +62,8 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str)
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "INSERT INTO documents (filename, file_hash) VALUES (%s, %s) ON CONFLICT (filename) DO UPDATE SET file_hash = EXCLUDED.file_hash RETURNING id",
-                        (file_name, file_hash)
+                        "INSERT INTO documents (filename, file_hash, source_id) VALUES (%s, %s, %s) ON CONFLICT (filename) DO UPDATE SET file_hash = EXCLUDED.file_hash, source_id = EXCLUDED.source_id RETURNING id",
+                        (file_name, file_hash, source_id)
                     )
                     doc_id = cur.fetchone()[0]
                     conn.commit()
