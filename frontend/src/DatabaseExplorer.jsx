@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { X, FileText, Database as DatabaseIcon, Trash2, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, FileText, Database as DatabaseIcon, Trash2, AlertTriangle, Upload } from 'lucide-react';
 
-export default function DatabaseExplorer({ onClose, documentsUrl }) {
+export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [documentToDelete, setDocumentToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const libraryInputRef = useRef(null);
+  const toolsInputRef = useRef(null);
 
   useEffect(() => {
     fetchDocuments();
@@ -13,7 +16,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl }) {
 
   const fetchDocuments = async () => {
     try {
-      const res = await fetch(documentsUrl);
+      const res = await fetch(documentsUrl, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setDocuments(data.documents || []);
@@ -49,6 +52,36 @@ export default function DatabaseExplorer({ onClose, documentsUrl }) {
     }
   };
 
+  const handleFileUpload = async (event, sourceId) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (sourceId) formData.append('source_id', sourceId);
+      
+      const res = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        await fetchDocuments();
+      } else {
+        alert("Failed to upload document.");
+      }
+    } catch (error) {
+      console.error("Failed to upload document", error);
+      alert("Error uploading document.");
+    } finally {
+      setIsUploading(false);
+      if (libraryInputRef.current) libraryInputRef.current.value = "";
+      if (toolsInputRef.current) toolsInputRef.current.value = "";
+    }
+  };
+
   return (
     <div style={{
       position: 'fixed',
@@ -80,9 +113,63 @@ export default function DatabaseExplorer({ onClose, documentsUrl }) {
             <DatabaseIcon size={24} color="#111111" />
             Database Explorer
           </h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '5px' }}>
-            <X size={24} color="#64748b" />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <input 
+              type="file" 
+              ref={libraryInputRef} 
+              style={{ display: 'none' }} 
+              onChange={(e) => handleFileUpload(e, '79279d88-e2c3-4a36-9da6-3f02dd71796b')} 
+            />
+            <input 
+              type="file" 
+              ref={toolsInputRef} 
+              style={{ display: 'none' }} 
+              onChange={(e) => handleFileUpload(e, 'b8118424-5418-47b7-a661-8bb768aa8ef5')} 
+            />
+            <button 
+              onClick={() => libraryInputRef.current?.click()}
+              disabled={isUploading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 12px',
+                backgroundColor: '#3b82f6',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: isUploading ? 'not-allowed' : 'pointer',
+                opacity: isUploading ? 0.7 : 1,
+                fontSize: '0.875rem'
+              }}
+            >
+              <Upload size={16} />
+              {isUploading ? 'Uploading...' : 'Upload files for library'}
+            </button>
+            <button 
+              onClick={() => toolsInputRef.current?.click()}
+              disabled={isUploading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 12px',
+                backgroundColor: '#10b981',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: isUploading ? 'not-allowed' : 'pointer',
+                opacity: isUploading ? 0.7 : 1,
+                fontSize: '0.875rem'
+              }}
+            >
+              <Upload size={16} />
+              {isUploading ? 'Uploading...' : 'Upload files for tools'}
+            </button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '5px' }}>
+              <X size={24} color="#64748b" />
+            </button>
+          </div>
         </div>
 
         <div style={{ padding: '20px', overflowY: 'auto', flex: 1, backgroundColor: '#f8fafc' }}>
@@ -109,7 +196,20 @@ export default function DatabaseExplorer({ onClose, documentsUrl }) {
                   >
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <FileText size={20} color="#111111" style={{ marginRight: '10px' }} />
-                      <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{doc.filename}</div>
+                      <div>
+                        <div style={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '6px' }}>{doc.filename}</div>
+                        <div style={{
+                          display: 'inline-block',
+                          fontSize: '0.7rem',
+                          fontWeight: '600',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          backgroundColor: doc.tag?.includes('chat') ? '#e0e7ff' : doc.tag?.includes('library') ? '#dcfce7' : doc.tag?.includes('tools') ? '#fef3c7' : '#f1f5f9',
+                          color: doc.tag?.includes('chat') ? '#4f46e5' : doc.tag?.includes('library') ? '#16a34a' : doc.tag?.includes('tools') ? '#d97706' : '#64748b'
+                        }}>
+                          {doc.tag?.includes('chat') ? 'Chat Interface' : doc.tag?.includes('library') ? 'Library' : doc.tag?.includes('tools') ? 'Tools' : doc.tag || 'Unknown'}
+                        </div>
+                      </div>
                     </div>
                     <button 
                       onClick={() => handleDeleteClick(doc)}

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Database, ChevronDown, Check, Cpu, MessageSquarePlus, Menu, Trash2, Clock } from 'lucide-react';
+import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Library, ChevronDown, Check, Cpu, MessageSquarePlus, Menu, Trash2, Clock } from 'lucide-react';
 import './App.css';
 import DatabaseExplorer from './DatabaseExplorer';
 
@@ -19,7 +19,7 @@ function App() {
   const [selectedModel, setSelectedModel] = useState("");
   const [availableModels, setAvailableModels] = useState([]);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
-  const [chatId, setChatId] = useState(crypto.randomUUID());
+  const [chatId, setChatId] = useState(null);
   const [chatSessions, setChatSessions] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -42,7 +42,7 @@ function App() {
     setMessages([{ text: "Hello! I'm your AI assistant. How can I help you today?", sender: "bot" }]);
     setInputValue("");
     setSelectedFile(null);
-    setChatId(crypto.randomUUID());
+    setChatId(null);
   };
 
   const handleFileSelect = (event) => {
@@ -82,7 +82,7 @@ function App() {
 
 
   const fetchChatSessions = () => {
-    fetch('http://localhost:8000/api/chats')
+    fetch('http://localhost:8000/api/chats', { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         if (data.chats) setChatSessions(data.chats);
@@ -96,8 +96,8 @@ function App() {
       .then(data => {
         if (data.history) {
           setChatId(id);
-          const msgs = data.history.map(msg => ({ text: msg.text, sender: msg.role === 'user' ? 'user' : 'bot' }));
-          setMessages(msgs.length ? msgs : [{ text: "Hello! I'm your AI assistant. How can I help you today?", sender: "bot" }]);
+          // Backend now formats the history properly and includes the default greeting
+          setMessages(data.history);
           setIsSidebarOpen(false);
         }
       })
@@ -118,9 +118,7 @@ function App() {
     const text = inputValue.trim();
     if (!text && !selectedFile) return;
 
-    let finalMessage = text;
-
-    // Display user message with attachment immediately
+    // Display user message with attachment immediately (optimistic UI update)
     let displayMessage = text;
     if (selectedFile) {
       displayMessage = text ? `[Attached File: ${selectedFile.name}]\n\n${text}` : `[Attached File: ${selectedFile.name}]`;
@@ -130,39 +128,21 @@ function App() {
     setInputValue("");
     
     const fileToUpload = selectedFile;
-    
     setSelectedFile(null); // Clear selected file right away
     setIsLoading(true);
 
     try {
-      let attachedFilename = null;
-      if (fileToUpload) {
-        // Upload the file first
-        const formData = new FormData();
-        formData.append('file', fileToUpload);
-        
-        const uploadRes = await fetch(UPLOAD_URL, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!uploadRes.ok) throw new Error("File upload failed");
-        const uploadData = await uploadRes.json();
-        
-        attachedFilename = uploadData.filename;
-      }
+      const formData = new FormData();
+      formData.append('message', text || "");
+      if (selectedModel) formData.append('model', selectedModel);
+      if (chatId) formData.append('session_id', chatId);
+      if (fileToUpload) formData.append('file', fileToUpload);
 
       const response = await fetch(BACKEND_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          message: text || "",
-          attached_filename: attachedFilename,
-          model: selectedModel,
-          session_id: chatId
-        })
+        // Note: Do not set Content-Type header when using FormData, 
+        // the browser will automatically set it to multipart/form-data with boundary
+        body: formData
       });
 
       if (!response.ok) {
@@ -171,6 +151,10 @@ function App() {
 
       const data = await response.json();
       const botReply = data.reply || data.response || data.message || "No response field found in JSON.";
+      
+      if (data.session_id && !chatId) {
+        setChatId(data.session_id);
+      }
       
       fetchChatSessions();
       
@@ -277,10 +261,10 @@ function App() {
             </div>
             <button 
               onClick={() => setShowDbModal(true)}
-              title="View Database"
+              title="View Library"
             >
-              <Database size={16} />
-              Database
+              <Library size={16} />
+              Library
             </button>
           </div>
         </header>
@@ -316,7 +300,7 @@ function App() {
         </main>
 
         {showDbModal && (
-          <DatabaseExplorer onClose={() => setShowDbModal(false)} documentsUrl={DOCUMENTS_URL} />
+          <DatabaseExplorer onClose={() => setShowDbModal(false)} documentsUrl={DOCUMENTS_URL} uploadUrl={UPLOAD_URL} />
         )}
 
 

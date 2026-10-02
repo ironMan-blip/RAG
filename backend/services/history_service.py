@@ -25,9 +25,10 @@ def save_chat_history(session_id: str, message: str, bot_reply: str, model: str,
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT id FROM chats WHERE id = %s", (session_id,))
-                if not cur.fetchone():
-                    cur.execute("INSERT INTO chats (id, name) VALUES (%s, %s)", (session_id, chat_title or "New Chat"))
+                cur.execute(
+                    "INSERT INTO chats (id, name) VALUES (%s, %s) ON CONFLICT (id) DO NOTHING",
+                    (session_id, chat_title or "New Chat")
+                )
                     
                 cur.execute(
                     "INSERT INTO chat_history (session_id, user_message, bot_reply, model) VALUES (%s, %s, %s, %s)",
@@ -54,14 +55,16 @@ def get_full_chat_history(session_id: str):
             with conn.cursor() as cur:
                 cur.execute("SELECT user_message, bot_reply FROM chat_history WHERE session_id = %s ORDER BY created_at ASC", (session_id,))
                 rows = cur.fetchall()
-                history = []
+                
+                # Logic moved to backend: Default fallback message is always included
+                history = [{"sender": "bot", "text": "Hello! I'm your AI assistant. How can I help you today?"}]
                 for row in rows:
-                    history.append({"role": "user", "text": row[0]})
-                    history.append({"role": "bot", "text": row[1]})
+                    history.append({"sender": "user", "text": row[0]})
+                    history.append({"sender": "bot", "text": row[1]})
                 return history
     except Exception as e:
         print(f"Error getting full chat history: {e}")
-        return []
+        return [{"sender": "bot", "text": "Hello! I'm your AI assistant. How can I help you today?"}]
 
 def delete_chat_by_id(session_id: str):
     try:

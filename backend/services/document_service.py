@@ -1,6 +1,7 @@
 import io
 import hashlib
 from core.database import get_db_connection
+from services.chunk_service import create_chunks_for_document, delete_chunks_for_document
 
 try:
     import pytesseract
@@ -36,7 +37,7 @@ def extract_text(content: bytes, content_type: str) -> str:
             extracted_text = f"[PDF Parsing Failed: {e}]"
     return extracted_text
 
-def process_and_save_document(file_name: str, content: bytes, content_type: str) -> tuple[str, str]:
+def process_and_save_document(file_name: str, content: bytes, content_type: str, source_id: str, session_id: str = None) -> tuple[str, str]:
     file_hash = hashlib.sha256(content).hexdigest()
     file_exists = False
     
@@ -61,13 +62,12 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str)
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "INSERT INTO documents (filename, content, file_hash) VALUES (%s, %s, %s) ON CONFLICT (filename) DO UPDATE SET content = EXCLUDED.content, file_hash = EXCLUDED.file_hash RETURNING id",
-                        (file_name, extracted_text.strip(), file_hash)
+                        "INSERT INTO documents (filename, file_hash, source_id, session_id) VALUES (%s, %s, %s, %s) ON CONFLICT (filename) DO UPDATE SET file_hash = EXCLUDED.file_hash, source_id = EXCLUDED.source_id, session_id = EXCLUDED.session_id RETURNING id",
+                        (file_name, file_hash, source_id, session_id)
                     )
                     doc_id = cur.fetchone()[0]
                     conn.commit()
             
-            from services.chunk_service import create_chunks_for_document
             create_chunks_for_document(doc_id, extracted_text.strip())
             
             upload_message += " and saved to database"
@@ -76,16 +76,29 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str)
             
     return upload_message, extracted_text.strip()
 
-def get_all_documents():
+def get_all_documents(session_id: str = None):
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, filename, file_hash FROM documents ORDER BY id DESC")
+            if session_id:
+                cur.execute("""
+                    SELECT d.id, d.filename, d.file_hash, s.source_name 
+                    FROM documents d 
+                    LEFT JOIN source s ON d.source_id = s.uuid 
+                    WHERE d.session_id IS NULL OR d.session_id = %s
+                    ORDER BY d.id DESC
+                """, (session_id,))
+            else:
+                cur.execute("""
+                    SELECT d.id, d.filename, d.file_hash, s.source_name 
+                    FROM documents d 
+                    LEFT JOIN source s ON d.source_id = s.uuid 
+                    ORDER BY d.id DESC
+                """)
             rows = cur.fetchall()
-    return [{"id": r[0], "filename": r[1], "file_hash": r[2]} for r in rows]
+    return [{"id": r[0], "filename": r[1], "file_hash": r[2], "tag": r[3] or "unknown"} for r in rows]
 
 def delete_document(doc_id: int) -> bool:
     try:
-        from services.chunk_service import delete_chunks_for_document
         delete_chunks_for_document(doc_id)
     except Exception as e:
         print(f"Failed to delete chunks: {e}")

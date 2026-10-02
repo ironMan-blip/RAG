@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi.concurrency import run_in_threadpool
 from services.document_service import (
     process_and_save_document,
     get_all_documents as fetch_all_documents,
@@ -8,10 +9,16 @@ from services.document_service import (
 router = APIRouter()
 
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), source_id: str = Form('79279d88-e2c3-4a36-9da6-3f02dd71796b')):
     try:
         content = await file.read()
-        upload_message, extracted_text = process_and_save_document(file.filename, content, file.content_type)
+        upload_message, extracted_text = await run_in_threadpool(
+            process_and_save_document, 
+            file.filename, 
+            content, 
+            file.content_type, 
+            source_id
+        )
         return {"filename": file.filename, "status": "success", "message": upload_message, "extracted_text": extracted_text}
     except Exception as e:
         print(f"File upload failed: {e}")
@@ -20,7 +27,8 @@ async def upload_file(file: UploadFile = File(...)):
 @router.get("/documents")
 async def get_all_documents():
     try:
-        return {"documents": fetch_all_documents()}
+        docs = await run_in_threadpool(fetch_all_documents)
+        return {"documents": docs}
     except Exception as e:
         print(f"Failed to fetch documents: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch documents")
@@ -28,7 +36,7 @@ async def get_all_documents():
 @router.delete("/documents/{doc_id}")
 async def delete_document(doc_id: int):
     try:
-        success = remove_doc(doc_id)
+        success = await run_in_threadpool(remove_doc, doc_id)
         if success:
             return {"status": "success", "message": "Document deleted"}
         raise HTTPException(status_code=404, detail="Document not found")
