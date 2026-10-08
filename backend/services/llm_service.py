@@ -39,7 +39,7 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
                             LIMIT 3
                         ) sub
                         ORDER BY sub.chunk_id ASC
-                    """, (attached_filename, query_embedding))
+                    """, (attached_filename, str(query_embedding)))
                 else:
                     cur.execute("""
                         SELECT c.chunk_text, d.filename 
@@ -48,7 +48,7 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
                         WHERE d.session_id IS NULL OR d.session_id = %s
                         ORDER BY c.chunk_embedding <-> %s::vector
                         LIMIT 5
-                    """, (session_id, query_embedding))
+                    """, (session_id, str(query_embedding)))
                 
                 rows = cur.fetchall()
                 if rows:
