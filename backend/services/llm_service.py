@@ -114,6 +114,23 @@ def generate_chat_title(message: str) -> str:
     except Exception:
         return message[:30] + "..." if len(message) > 30 else message
 
+def generate_tags_for_chunk(chunk_text: str) -> str:
+    try:
+        prompt = f"Given the following text chunk, generate a JSON object containing descriptive tags and metadata. Output ONLY valid JSON, no markdown blocks. Example: {{\"tags\": [\"tag1\", \"tag2\"]}}\n\nText:\n{chunk_text}"
+        response = client.chat.completions.create(
+            model="google/gemini-2.0-flash-lite-preview-02-05:free",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        content = response.choices[0].message.content.strip()
+        if content.startswith("```json"):
+            content = content[7:-3].strip()
+        elif content.startswith("```"):
+            content = content[3:-3].strip()
+        return content
+    except Exception as e:
+        print(f"Error generating tags for chunk: {e}")
+        return "{}"
+
 @traceable
 def get_chat_completion(message: str, attached_filename: str = None, model: str = None, session_id: str = None) -> str:
     """Sends a message to the AI and retrieves the reply, including database context."""

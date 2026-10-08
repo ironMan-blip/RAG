@@ -12,7 +12,7 @@ try:
 except ImportError:
     text_splitter = None
 
-def create_chunks_for_document(doc_id: int, text: str):
+def create_chunks_for_document(doc_id: int, text: str, source_name: str = None):
     if not embedder or not text_splitter:
         print("SentenceTransformer or Langchain Text Splitters not installed.")
         return
@@ -21,13 +21,24 @@ def create_chunks_for_document(doc_id: int, text: str):
     
     delete_chunks_for_document(doc_id)
     
+    from services.llm_service import generate_tags_for_chunk
+    import json
+    
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             for chunk in chunks:
                 embedding = embedder.encode(chunk).tolist()
+                metadata_json = None
+                if source_name == 'tools':
+                    metadata_str = generate_tags_for_chunk(chunk)
+                    try:
+                        metadata_json = json.dumps(json.loads(metadata_str))
+                    except Exception as e:
+                        print(f"Failed to parse metadata JSON: {e}")
+                        
                 cur.execute(
-                    "INSERT INTO chunks (doc_id, chunk_text, chunk_embedding) VALUES (%s, %s, %s)",
-                    (doc_id, chunk, embedding)
+                    "INSERT INTO chunks (doc_id, chunk_text, chunk_embedding, metadata) VALUES (%s, %s, %s, %s)",
+                    (doc_id, chunk, embedding, metadata_json)
                 )
         conn.commit()
 

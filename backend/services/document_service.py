@@ -59,6 +59,7 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
 
     if extracted_text.strip():
         try:
+            source_name = None
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
@@ -66,9 +67,15 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
                         (file_name, file_hash, source_id, session_id)
                     )
                     doc_id = cur.fetchone()[0]
+                    
+                    cur.execute("SELECT source_name FROM source WHERE uuid = %s", (source_id,))
+                    source_row = cur.fetchone()
+                    if source_row:
+                        source_name = source_row[0]
+                        
                     conn.commit()
             
-            create_chunks_for_document(doc_id, extracted_text.strip())
+            create_chunks_for_document(doc_id, extracted_text.strip(), source_name)
             
             upload_message += " and saved to database"
         except Exception as db_err:
