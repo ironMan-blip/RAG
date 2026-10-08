@@ -14,14 +14,16 @@ CREATE TABLE IF NOT EXISTS documents (
     filename VARCHAR(255) UNIQUE NOT NULL,
     file_hash VARCHAR(255),
     source_id VARCHAR(255) REFERENCES source(uuid),
-    session_id VARCHAR(255)
+    session_id VARCHAR(255),
+    metadata JSONB
 );
 
 CREATE TABLE IF NOT EXISTS chunks (
     chunk_id SERIAL PRIMARY KEY,
     doc_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
     chunk_text TEXT NOT NULL,
-    chunk_embedding vector(384) -- adjust dimension if needed
+    chunk_embedding vector(384),
+    metadata JSONB
 );
 
 CREATE TABLE IF NOT EXISTS chats (

@@ -59,16 +59,34 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
 
     if extracted_text.strip():
         try:
+            source_name = None
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
+                    cur.execute("SELECT source_name FROM source WHERE uuid = %s", (source_id,))
+                    source_row = cur.fetchone()
+                    metadata_json = None
+                    if source_row:
+                        source_name = source_row[0]
+                        if source_name == 'tools':
+                            session_id = None
+                            try:
+                                from services.llm_service import generate_tags_for_chunk
+                                import json
+                                # Use up to first 20000 characters to avoid huge payload while getting a good summary
+                                metadata_str = generate_tags_for_chunk(extracted_text.strip()[:20000])
+                                metadata_json = json.dumps(json.loads(metadata_str))
+                            except Exception as e:
+                                print(f"Failed to generate/parse document metadata JSON: {e}")
+
                     cur.execute(
-                        "INSERT INTO documents (filename, file_hash, source_id, session_id) VALUES (%s, %s, %s, %s) ON CONFLICT (filename) DO UPDATE SET file_hash = EXCLUDED.file_hash, source_id = EXCLUDED.source_id, session_id = EXCLUDED.session_id RETURNING id",
-                        (file_name, file_hash, source_id, session_id)
+                        "INSERT INTO documents (filename, file_hash, source_id, session_id, metadata) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (filename) DO UPDATE SET file_hash = EXCLUDED.file_hash, source_id = EXCLUDED.source_id, session_id = EXCLUDED.session_id, metadata = EXCLUDED.metadata RETURNING id",
+                        (file_name, file_hash, source_id, session_id, metadata_json)
                     )
                     doc_id = cur.fetchone()[0]
+                        
                     conn.commit()
             
-            create_chunks_for_document(doc_id, extracted_text.strip())
+            create_chunks_for_document(doc_id, extracted_text.strip(), source_name)
             
             upload_message += " and saved to database"
         except Exception as db_err:

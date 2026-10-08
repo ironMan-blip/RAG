@@ -12,7 +12,7 @@ try:
 except ImportError:
     text_splitter = None
 
-def create_chunks_for_document(doc_id: int, text: str):
+def create_chunks_for_document(doc_id: int, text: str, source_name: str = None):
     if not embedder or not text_splitter:
         print("SentenceTransformer or Langchain Text Splitters not installed.")
         return
@@ -25,9 +25,10 @@ def create_chunks_for_document(doc_id: int, text: str):
         with conn.cursor() as cur:
             for chunk in chunks:
                 embedding = embedder.encode(chunk).tolist()
+                metadata_json = None
                 cur.execute(
-                    "INSERT INTO chunks (doc_id, chunk_text, chunk_embedding) VALUES (%s, %s, %s)",
-                    (doc_id, chunk, embedding)
+                    "INSERT INTO chunks (doc_id, chunk_text, chunk_embedding, metadata) VALUES (%s, %s, %s, %s)",
+                    (doc_id, chunk, embedding, metadata_json)
                 )
         conn.commit()
 

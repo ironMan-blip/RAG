@@ -21,6 +21,7 @@ def get_document_names_str(session_id: str = None) -> str:
 @traceable
 def get_database_context(query: str, attached_filename: str = None, session_id: str = None) -> str:
     if embedder is None:
+        print("Error: Embedder is None in get_database_context")
         return ""
     context = ""
     try:
@@ -38,7 +39,7 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
                             LIMIT 3
                         ) sub
                         ORDER BY sub.chunk_id ASC
-                    """, (attached_filename, query_embedding))
+                    """, (attached_filename, str(query_embedding)))
                 else:
                     cur.execute("""
                         SELECT c.chunk_text, d.filename 
@@ -47,7 +48,7 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
                         WHERE d.session_id IS NULL OR d.session_id = %s
                         ORDER BY c.chunk_embedding <-> %s::vector
                         LIMIT 5
-                    """, (session_id, query_embedding))
+                    """, (session_id, str(query_embedding)))
                 
                 rows = cur.fetchall()
                 if rows:
@@ -98,6 +99,9 @@ def jev_decide_if_context_needed(message: str, session_id: str = None) -> bool:
         response = httpx.post("https://openrouter.ai/api/alpha/decisions", headers=headers, json=payload, timeout=10.0)
         response.raise_for_status()
         result = response.json()
+        if "error" in result:
+            print(f"Jev API returned an error payload: {result['error']}")
+            return True
         probability_yes = result.get("answers", {}).get("needs_context", {}).get("noul", 0.0)
         return probability_yes > 0.5
     except Exception as e:
@@ -113,6 +117,23 @@ def generate_chat_title(message: str) -> str:
         return title_response.choices[0].message.content.strip().strip('"')
     except Exception:
         return message[:30] + "..." if len(message) > 30 else message
+
+def generate_tags_for_chunk(chunk_text: str) -> str:
+    try:
+        prompt = f"Given the following text chunk, generate a JSON object containing descriptive tags and metadata. Output ONLY valid JSON, no markdown blocks. Example: {{\"tags\": [\"tag1\", \"tag2\"]}}\n\nText:\n{chunk_text}"
+        response = client.chat.completions.create(
+            model="google/gemini-2.0-flash-lite-preview-02-05:free",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        content = response.choices[0].message.content.strip()
+        if content.startswith("```json"):
+            content = content[7:-3].strip()
+        elif content.startswith("```"):
+            content = content[3:-3].strip()
+        return content
+    except Exception as e:
+        print(f"Error generating tags for chunk: {e}")
+        return "{}"
 
 @traceable
 def get_chat_completion(message: str, attached_filename: str = None, model: str = None, session_id: str = None) -> str:
