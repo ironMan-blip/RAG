@@ -21,6 +21,7 @@ def get_document_names_str(session_id: str = None) -> str:
 @traceable
 def get_database_context(query: str, attached_filename: str = None, session_id: str = None) -> str:
     if embedder is None:
+        print("Error: Embedder is None in get_database_context")
         return ""
     context = ""
     try:
@@ -98,6 +99,9 @@ def jev_decide_if_context_needed(message: str, session_id: str = None) -> bool:
         response = httpx.post("https://openrouter.ai/api/alpha/decisions", headers=headers, json=payload, timeout=10.0)
         response.raise_for_status()
         result = response.json()
+        if "error" in result:
+            print(f"Jev API returned an error payload: {result['error']}")
+            return True
         probability_yes = result.get("answers", {}).get("needs_context", {}).get("noul", 0.0)
         return probability_yes > 0.5
     except Exception as e:
