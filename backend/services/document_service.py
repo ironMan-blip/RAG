@@ -62,16 +62,18 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
             source_name = None
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
+                    cur.execute("SELECT source_name FROM source WHERE uuid = %s", (source_id,))
+                    source_row = cur.fetchone()
+                    if source_row:
+                        source_name = source_row[0]
+                        if source_name == 'tools':
+                            session_id = None
+
                     cur.execute(
                         "INSERT INTO documents (filename, file_hash, source_id, session_id) VALUES (%s, %s, %s, %s) ON CONFLICT (filename) DO UPDATE SET file_hash = EXCLUDED.file_hash, source_id = EXCLUDED.source_id, session_id = EXCLUDED.session_id RETURNING id",
                         (file_name, file_hash, source_id, session_id)
                     )
                     doc_id = cur.fetchone()[0]
-                    
-                    cur.execute("SELECT source_name FROM source WHERE uuid = %s", (source_id,))
-                    source_row = cur.fetchone()
-                    if source_row:
-                        source_name = source_row[0]
                         
                     conn.commit()
             
