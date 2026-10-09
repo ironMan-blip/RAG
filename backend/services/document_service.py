@@ -76,8 +76,6 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
                                 metadata_str = generate_tags_for_chunk(extracted_text.strip()[:20000])
                                 parsed_metadata = json.loads(metadata_str)
                                 metadata_json = json.dumps(parsed_metadata)
-                                with open(f"{file_name}_metadata.json", "w") as meta_f:
-                                    json.dump(parsed_metadata, meta_f, indent=4)
                             except Exception as e:
                                 print(f"Failed to generate/parse document metadata JSON: {e}")
 
@@ -116,7 +114,36 @@ def get_all_documents(session_id: str = None):
                     ORDER BY d.id DESC
                 """)
             rows = cur.fetchall()
-    return [{"id": r[0], "filename": r[1], "file_hash": r[2], "tag": r[3] or "unknown"} for r in rows]
+    docs = []
+    for r in rows:
+        tag_str = r[3] or "unknown"
+        if 'chat' in tag_str:
+            tag_label = 'Chat Interface'
+            bg_color = '#e0e7ff'
+            text_color = '#4f46e5'
+        elif 'library' in tag_str:
+            tag_label = 'Library'
+            bg_color = '#dcfce7'
+            text_color = '#16a34a'
+        elif 'tools' in tag_str:
+            tag_label = 'Tools'
+            bg_color = '#fef3c7'
+            text_color = '#d97706'
+        else:
+            tag_label = tag_str
+            bg_color = '#f1f5f9'
+            text_color = '#64748b'
+            
+        docs.append({
+            "id": r[0],
+            "filename": r[1],
+            "file_hash": r[2],
+            "tag": tag_str,
+            "tag_label": tag_label,
+            "tag_bg_color": bg_color,
+            "tag_text_color": text_color
+        })
+    return docs
 
 def delete_document(doc_id: int) -> bool:
     try:

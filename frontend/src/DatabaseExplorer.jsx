@@ -52,7 +52,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
     }
   };
 
-  const handleFileUpload = async (event, sourceId) => {
+  const handleFileUpload = async (event, source) => {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -60,7 +60,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      if (sourceId) formData.append('source_id', sourceId);
+      if (source) formData.append('source', source);
       
       const res = await fetch(uploadUrl, {
         method: 'POST',
@@ -118,13 +118,13 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
               type="file" 
               ref={libraryInputRef} 
               style={{ display: 'none' }} 
-              onChange={(e) => handleFileUpload(e, '79279d88-e2c3-4a36-9da6-3f02dd71796b')} 
+              onChange={(e) => handleFileUpload(e, 'library')} 
             />
             <input 
               type="file" 
               ref={toolsInputRef} 
               style={{ display: 'none' }} 
-              onChange={(e) => handleFileUpload(e, 'b8118424-5418-47b7-a661-8bb768aa8ef5')} 
+              onChange={(e) => handleFileUpload(e, 'tools')} 
             />
             <button 
               onClick={() => libraryInputRef.current?.click()}
@@ -204,10 +204,10 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
                           fontWeight: '600',
                           padding: '2px 8px',
                           borderRadius: '12px',
-                          backgroundColor: doc.tag?.includes('chat') ? '#e0e7ff' : doc.tag?.includes('library') ? '#dcfce7' : doc.tag?.includes('tools') ? '#fef3c7' : '#f1f5f9',
-                          color: doc.tag?.includes('chat') ? '#4f46e5' : doc.tag?.includes('library') ? '#16a34a' : doc.tag?.includes('tools') ? '#d97706' : '#64748b'
+                          backgroundColor: doc.tag_bg_color,
+                          color: doc.tag_text_color
                         }}>
-                          {doc.tag?.includes('chat') ? 'Chat Interface' : doc.tag?.includes('library') ? 'Library' : doc.tag?.includes('tools') ? 'Tools' : doc.tag || 'Unknown'}
+                          {doc.tag_label}
                         </div>
                       </div>
                     </div>

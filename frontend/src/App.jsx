@@ -122,7 +122,7 @@ function App() {
     // Display user message with attachment immediately (optimistic UI update)
     let displayMessage = text;
     if (selectedFile) {
-      displayMessage = text ? `[Attached File: ${selectedFile.name}]\n\n${text}` : `[Attached File: ${selectedFile.name}]`;
+      displayMessage = text ? `(Attachment: ${selectedFile.name}) ${text}` : `(Attachment: ${selectedFile.name})`;
     }
 
     setMessages(prev => [...prev, { text: displayMessage, sender: 'user' }]);

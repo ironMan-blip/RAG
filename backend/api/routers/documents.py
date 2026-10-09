@@ -9,7 +9,13 @@ from services.document_service import (
 router = APIRouter()
 
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...), source_id: str = Form('79279d88-e2c3-4a36-9da6-3f02dd71796b')):
+async def upload_file(file: UploadFile = File(...), source: str = Form('library')):
+    uuid_map = {
+        'library': '79279d88-e2c3-4a36-9da6-3f02dd71796b',
+        'tools': 'b8118424-5418-47b7-a661-8bb768aa8ef5',
+        'chat': '20a26963-d20c-469f-8837-620321d589a6'
+    }
+    actual_source_id = uuid_map.get(source, source)
     try:
         content = await file.read()
         upload_message, extracted_text = await run_in_threadpool(
@@ -17,7 +23,7 @@ async def upload_file(file: UploadFile = File(...), source_id: str = Form('79279
             file.filename, 
             content, 
             file.content_type, 
-            source_id
+            actual_source_id
         )
         return {"filename": file.filename, "status": "success", "message": upload_message, "extracted_text": extracted_text}
     except Exception as e:

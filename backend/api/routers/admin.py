@@ -35,7 +35,17 @@ def get_table_data(table_name: str, limit: int = 100):
             for row in rows:
                 row_dict = {}
                 for col, val in zip(columns, row):
-                    row_dict[col] = str(val) if val is not None else None
+                    str_val = str(val) if val is not None else None
+                    if str_val and len(str_val) > 60:
+                        display_val = str_val[:60] + "..."
+                    else:
+                        display_val = str_val
+                        
+                    row_dict[col] = {
+                        "original": str_val,
+                        "display": display_val,
+                        "is_null": val is None
+                    }
                 data.append(row_dict)
                 
             return {"columns": columns, "data": data}
