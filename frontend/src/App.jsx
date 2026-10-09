@@ -261,7 +261,7 @@ function App() {
               )}
             </div>
             <button 
-              onClick={() => setShowDbModal(true)}
+              onClick={() => navigate('/admin')}
               title="View Library"
             >
               <Library size={16} />
@@ -300,9 +300,7 @@ function App() {
           )}
         </main>
 
-        {showDbModal && (
-          <DatabaseExplorer onClose={() => setShowDbModal(false)} documentsUrl={DOCUMENTS_URL} uploadUrl={UPLOAD_URL} />
-        )}
+        {/* Admin modal removed in favor of separate page */}
 
         <footer className="chat-input-area">
           {selectedFile && (

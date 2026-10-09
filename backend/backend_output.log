@@ -76,3 +76,31 @@ INFO:     127.0.0.1:63098 - "OPTIONS /api/documents/17 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:63098 - "DELETE /api/documents/17 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:63098 - "OPTIONS /api/documents/16 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:63098 - "DELETE /api/documents/16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63107 - "GET /api/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63108 - "GET /api/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63131 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63133 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63133 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63131 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63135 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63150 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63135 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63151 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63151 - "GET /api/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63135 - "GET /api/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63157 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63157 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63158 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63155 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63155 - "GET /api/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63158 - "GET /api/documents HTTP/1.1" 200 OK
+fontTools is required to fully parse the encoding of a CFF Type1 font in font dictionary {'/BaseFont': '/WAPPGG+SymbolMT', '/Encoding': IndirectObject(1002, 0, 5343755952), '/FirstChar': 30, '/FontDescriptor': IndirectObject(1003, 0, 5343755952), '/LastChar': 31, '/Subtype': '/Type1', '/Type': '/Font', '/Widths': [549, 713]}, but is not installed. Consider installing fontTools if you encounter encoding problems.
+fontTools is required to fully parse the encoding of a CFF Type1 font in font dictionary {'/BaseFont': '/TYBXQM+TimesNewRomanPS-ItalicMT', '/Encoding': IndirectObject(1004, 0, 5343755952), '/FirstChar': 30, '/FontDescriptor': IndirectObject(1005, 0, 5343755952), '/LastChar': 31, '/Subtype': '/Type1', '/Type': '/Font', '/Widths': [722, 667]}, but is not installed. Consider installing fontTools if you encounter encoding problems.
+fontTools is required to fully parse the encoding of a CFF Type1 font in font dictionary {'/BaseFont': '/TYBXQM+TimesNewRomanPSMT', '/Encoding': IndirectObject(1006, 0, 5343755952), '/FirstChar': 26, '/FontDescriptor': IndirectObject(1007, 0, 5343755952), '/LastChar': 31, '/Subtype': '/Type1', '/Type': '/Font', '/Widths': [333, 722, 200, 667, 333, 556]}, but is not installed. Consider installing fontTools if you encounter encoding problems.
+Error generating tags for chunk: Error code: 404 - {'error': {'message': 'No endpoints found for google/gemma-2-9b-it:free.', 'code': 404}, 'user_id': 'user_3K5iT6uaUCLlpOtDvE9YIzXJGuK'}
+INFO:     127.0.0.1:63160 - "POST /api/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63160 - "GET /api/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63170 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63170 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63168 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63171 - "GET /api/chats HTTP/1.1" 200 OK
