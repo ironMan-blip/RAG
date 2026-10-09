@@ -174,11 +174,9 @@ export default function DatabasePage() {
                       {tableData.data.map((row, i) => (
                         <tr key={i} className="hover:bg-indigo-50/30 transition-colors group">
                           {tableData.columns.map((col, j) => (
-                            <td key={j} className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium group-hover:text-gray-900">
+                            <td key={j} className="px-6 py-4 text-gray-700 font-medium group-hover:text-gray-900 max-w-xl whitespace-pre-wrap break-words">
                               {!row[col].is_null ? (
-                                row[col].original.length > 60 ? (
-                                  <span title={row[col].original}>{row[col].display}</span>
-                                ) : row[col].display
+                                row[col].original
                               ) : (
                                 <span className="text-gray-400 italic font-normal">NULL</span>
                               )}

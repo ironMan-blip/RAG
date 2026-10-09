@@ -120,7 +120,20 @@ def generate_chat_title(message: str) -> str:
 
 def generate_tags_for_chunk(chunk_text: str) -> str:
     try:
-        prompt = f"Given the following text chunk, generate a JSON object containing descriptive tags and metadata. Output ONLY valid JSON, no markdown blocks. Example: {{\"tags\": [\"tag1\", \"tag2\"]}}\n\nText:\n{chunk_text}"
+        prompt = f"""Given the following text chunk, generate a JSON object containing descriptive tags and metadata. Output ONLY valid JSON, no markdown blocks. 
+The JSON MUST follow this exact structure with 5 fixed keys and 10 unfixed tags:
+{{
+  "year": "...",
+  "grade": "...",
+  "subject": "...",
+  "topic": "...",
+  "subtopic": "...",
+  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8", "tag9", "tag10"]
+}}
+Make sure there are exactly 10 strings in the "tags" array.
+
+Text:
+{chunk_text}"""
         response = client.chat.completions.create(
             model=settings.LLM_MODEL1,
             messages=[{"role": "user", "content": prompt}]
