@@ -1,14 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Library, ChevronDown, Check, Cpu, MessageSquarePlus, Menu, Trash2, Clock } from 'lucide-react';
+import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Library, ChevronDown, Check, Cpu, MessageSquarePlus, Menu, Trash2, Clock, Database } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import './App.css';
 import DatabaseExplorer from './DatabaseExplorer';
-
 
 const BACKEND_URL = 'http://localhost:8000/api/chat';
 const UPLOAD_URL = 'http://localhost:8000/api/upload';
 const DOCUMENTS_URL = 'http://localhost:8000/api/documents';
 
 function App() {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState([
     { text: "Hello! I'm your AI assistant. How can I help you today?", sender: "bot" }
   ]);
@@ -266,6 +267,13 @@ function App() {
               <Library size={16} />
               Library
             </button>
+            <button 
+              onClick={() => navigate('/database')}
+              title="Database Viewer"
+            >
+              <Database size={16} />
+              Database
+            </button>
           </div>
         </header>
 
@@ -302,8 +310,6 @@ function App() {
         {showDbModal && (
           <DatabaseExplorer onClose={() => setShowDbModal(false)} documentsUrl={DOCUMENTS_URL} uploadUrl={UPLOAD_URL} />
         )}
-
-
 
         <footer className="chat-input-area">
           {selectedFile && (
