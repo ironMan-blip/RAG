@@ -392,9 +392,21 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
                         </div>
                         {expandedDoc === `chunk-${chunk.chunk_id}` && (
                           <div style={{ padding: '15px', borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
-                            <div style={{ fontSize: '0.9rem', color: '#334155', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
+                            <div style={{ fontSize: '0.9rem', color: '#334155', whiteSpace: 'pre-wrap', lineHeight: '1.5', marginBottom: '15px' }}>
                               {chunk.chunk_text}
                             </div>
+                            <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#1e293b', marginBottom: '8px' }}>Metadata:</div>
+                            <pre style={{ margin: 0, fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: '#f1f5f9', padding: '10px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
+                              {(() => {
+                                if (!chunk.metadata) return 'No metadata available for this chunk.';
+                                try {
+                                  const parsed = typeof chunk.metadata === 'string' ? JSON.parse(chunk.metadata) : chunk.metadata;
+                                  return JSON.stringify(parsed, null, 2);
+                                } catch (e) {
+                                  return String(chunk.metadata);
+                                }
+                              })()}
+                            </pre>
                           </div>
                         )}
                       </div>
