@@ -267,13 +267,6 @@ function App() {
               <Library size={16} />
               Library
             </button>
-            <button 
-              onClick={() => navigate('/database')}
-              title="Database Viewer"
-            >
-              <Database size={16} />
-              Database
-            </button>
           </div>
         </header>
 
