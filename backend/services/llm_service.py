@@ -137,7 +137,7 @@ def generate_tags_for_chunk(chunk_text: str) -> str:
     
     try:
         llm = ChatOpenAI(
-            model="meta-llama/llama-3.3-70b-instruct:free",
+            model=settings.LLM_MODEL2,
             api_key=settings.OPENROUTER_API_KEY,
             base_url=settings.OPENROUTER_BASE_URL,
             temperature=0.0
