@@ -74,7 +74,10 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
                                 import json
                                 # Use up to first 20000 characters to avoid huge payload while getting a good summary
                                 metadata_str = generate_tags_for_chunk(extracted_text.strip()[:20000])
-                                metadata_json = json.dumps(json.loads(metadata_str))
+                                parsed_metadata = json.loads(metadata_str)
+                                metadata_json = json.dumps(parsed_metadata)
+                                with open(f"{file_name}_metadata.json", "w") as meta_f:
+                                    json.dump(parsed_metadata, meta_f, indent=4)
                             except Exception as e:
                                 print(f"Failed to generate/parse document metadata JSON: {e}")
 

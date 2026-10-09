@@ -111,7 +111,7 @@ def jev_decide_if_context_needed(message: str, session_id: str = None) -> bool:
 def generate_chat_title(message: str) -> str:
     try:
         title_response = client.chat.completions.create(
-            model="google/gemini-flash-1.5-8b",
+            model=settings.LLM_MODEL1,
             messages=[{"role": "user", "content": f"Summarize this prompt in 3-5 words for a chat title. Output only the title, no quotes or other text:\n{message}"}],
         )
         return title_response.choices[0].message.content.strip().strip('"')
@@ -122,7 +122,7 @@ def generate_tags_for_chunk(chunk_text: str) -> str:
     try:
         prompt = f"Given the following text chunk, generate a JSON object containing descriptive tags and metadata. Output ONLY valid JSON, no markdown blocks. Example: {{\"tags\": [\"tag1\", \"tag2\"]}}\n\nText:\n{chunk_text}"
         response = client.chat.completions.create(
-            model="google/gemini-2.0-flash-lite-preview-02-05:free",
+            model=settings.LLM_MODEL1,
             messages=[{"role": "user", "content": prompt}]
         )
         content = response.choices[0].message.content.strip()
