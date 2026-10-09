@@ -27,6 +27,17 @@ def create_chunks_for_document(doc_id: int, text: str, source_name: str = None):
             for chunk in chunks:
                 embedding = embedder.encode(chunk).tolist()
                 metadata_json = None
+                
+                if source_name == 'tools':
+                    try:
+                        from services.llm_service import generate_tags_for_chunk
+                        import json
+                        metadata_str = generate_tags_for_chunk(chunk)
+                        parsed_metadata = json.loads(metadata_str)
+                        metadata_json = json.dumps(parsed_metadata)
+                    except Exception as e:
+                        print(f"Failed to generate/parse chunk metadata JSON: {e}")
+
                 cur.execute(
                     "INSERT INTO chunks (doc_id, chunk_text, chunk_embedding, metadata) VALUES (%s, %s, %s, %s)",
                     (doc_id, chunk, embedding, metadata_json)
@@ -38,3 +49,24 @@ def delete_chunks_for_document(doc_id: int):
         with conn.cursor() as cur:
             cur.execute("DELETE FROM chunks WHERE doc_id = %s", (doc_id,))
         conn.commit()
+
+def get_all_chunks():
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT c.chunk_id, c.doc_id, d.filename, c.chunk_text, c.metadata
+                FROM chunks c
+                JOIN documents d ON c.doc_id = d.id
+                ORDER BY c.chunk_id DESC
+            """)
+            rows = cur.fetchall()
+    chunks = []
+    for r in rows:
+        chunks.append({
+            "chunk_id": r[0],
+            "doc_id": r[1],
+            "filename": r[2],
+            "chunk_text": r[3],
+            "metadata": r[4]
+        })
+    return chunks

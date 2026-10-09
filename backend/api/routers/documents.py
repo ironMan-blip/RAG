@@ -5,6 +5,7 @@ from services.document_service import (
     get_all_documents as fetch_all_documents,
     delete_document as remove_doc
 )
+from services.chunk_service import get_all_chunks as fetch_all_chunks
 
 router = APIRouter()
 
@@ -51,3 +52,12 @@ async def delete_document(doc_id: int):
     except Exception as e:
         print(f"Failed to delete document: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete document")
+
+@router.get("/chunks")
+async def get_all_chunks():
+    try:
+        chunks = await run_in_threadpool(fetch_all_chunks)
+        return {"chunks": chunks}
+    except Exception as e:
+        print(f"Failed to fetch chunks: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch chunks")
