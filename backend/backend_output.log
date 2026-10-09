@@ -1,0 +1,52 @@
+INFO:     Will watch for changes in these directories: ['/Users/mashrafimahmudrafi/Desktop/rag/backend']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [30690] using StatReload
+/Users/mashrafimahmudrafi/Desktop/rag/backend/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [30692]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:62858 - "POST /api/upload HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'services/chunk_service.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [30692]
+/Users/mashrafimahmudrafi/Desktop/rag/backend/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+WARNING:  StatReload detected changes in 'services/document_service.py'. Reloading...
+INFO:     Started server process [30790]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+/Users/mashrafimahmudrafi/Desktop/rag/backend/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [30812]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:62873 - "POST /api/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63034 - "GET /api/admin/tables/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63034 - "GET /api/admin/tables/source HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63034 - "GET /api/admin/tables/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63034 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63034 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63034 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63036 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63036 - "GET /api/admin/tables HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63034 - "GET /api/admin/tables HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63036 - "GET /api/admin/tables/source HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63036 - "GET /api/admin/tables/source HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63036 - "GET /api/admin/tables/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63040 - "GET /api/admin/tables/chunks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63045 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63042 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63046 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63045 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63045 - "GET /api/admin/tables HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63046 - "GET /api/admin/tables HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63045 - "GET /api/admin/tables/source HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63045 - "GET /api/admin/tables/source HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63045 - "GET /api/admin/tables/chunks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63048 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63053 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63048 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63054 - "GET /api/chats HTTP/1.1" 200 OK

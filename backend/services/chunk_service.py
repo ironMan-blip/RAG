@@ -14,8 +14,9 @@ except ImportError:
 
 def create_chunks_for_document(doc_id: int, text: str, source_name: str = None):
     if not embedder or not text_splitter:
-        print("SentenceTransformer or Langchain Text Splitters not installed.")
-        return
+        error_msg = "SentenceTransformer or Langchain Text Splitters not installed."
+        print(error_msg)
+        raise Exception(error_msg)
         
     chunks = text_splitter.split_text(text)
     

@@ -35,6 +35,11 @@ def extract_text(content: bytes, content_type: str) -> str:
             extracted_text = "[pypdf not installed]"
         except Exception as e:
             extracted_text = f"[PDF Parsing Failed: {e}]"
+    else:
+        try:
+            extracted_text = content.decode('utf-8')
+        except Exception:
+            extracted_text = ""
     return extracted_text
 
 def process_and_save_document(file_name: str, content: bytes, content_type: str, source_id: str, session_id: str = None) -> tuple[str, str]:
