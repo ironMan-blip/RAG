@@ -118,32 +118,44 @@ def generate_chat_title(message: str) -> str:
     except Exception:
         return message[:30] + "..." if len(message) > 30 else message
 
-def generate_tags_for_chunk(chunk_text: str) -> str:
-    try:
-        prompt = f"""Given the following text chunk, generate a JSON object containing descriptive tags and metadata. Output ONLY valid JSON, no markdown blocks. 
-The JSON MUST follow this exact structure with 5 fixed keys and 10 unfixed tags:
-{{
-  "year": "...",
-  "grade": "...",
-  "subject": "...",
-  "topic": "...",
-  "subtopic": "...",
-  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8", "tag9", "tag10"]
-}}
-Make sure there are exactly 10 strings in the "tags" array.
+from pydantic import BaseModel, Field
 
-Text:
-{chunk_text}"""
-        response = client.chat.completions.create(
-            model=settings.LLM_MODEL1,
-            messages=[{"role": "user", "content": prompt}]
+class TagMetadata(BaseModel):
+    year: str = Field(description="The year mentioned or implied in the text")
+    grade: str = Field(description="The grade level suitable for the text")
+    subject: str = Field(description="The main subject of the text")
+    topic: str = Field(description="The main topic of the text")
+    subtopic: str = Field(description="The subtopic of the text")
+    tags: list[str] = Field(description="Exactly 10 descriptive tags for the text", min_length=10, max_length=10)
+
+@traceable
+def generate_tags_for_chunk(chunk_text: str) -> str:
+    from langchain_openai import ChatOpenAI
+    from langchain_core.prompts import PromptTemplate
+    from langchain_core.output_parsers import JsonOutputParser
+    import json
+    
+    try:
+        llm = ChatOpenAI(
+            model="google/gemma-2-9b-it:free",
+            api_key=settings.OPENROUTER_API_KEY,
+            base_url=settings.OPENROUTER_BASE_URL,
+            temperature=0.0
         )
-        content = response.choices[0].message.content.strip()
-        if content.startswith("```json"):
-            content = content[7:-3].strip()
-        elif content.startswith("```"):
-            content = content[3:-3].strip()
-        return content
+        
+        parser = JsonOutputParser(pydantic_object=TagMetadata)
+        
+        prompt = PromptTemplate(
+            template="Given the following text chunk, generate descriptive tags and metadata.\n{format_instructions}\n\nText:\n{chunk_text}",
+            input_variables=["chunk_text"],
+            partial_variables={"format_instructions": parser.get_format_instructions()},
+        )
+        
+        chain = prompt | llm | parser
+        
+        result = chain.invoke({"chunk_text": chunk_text})
+        
+        return json.dumps(result)
     except Exception as e:
         print(f"Error generating tags for chunk: {e}")
         return "{}"
