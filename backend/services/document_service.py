@@ -35,6 +35,11 @@ def extract_text(content: bytes, content_type: str) -> str:
             extracted_text = "[pypdf not installed]"
         except Exception as e:
             extracted_text = f"[PDF Parsing Failed: {e}]"
+    else:
+        try:
+            extracted_text = content.decode('utf-8')
+        except Exception:
+            extracted_text = ""
     return extracted_text
 
 def process_and_save_document(file_name: str, content: bytes, content_type: str, source_id: str, session_id: str = None) -> tuple[str, str]:
@@ -74,7 +79,8 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
                                 import json
                                 # Use up to first 20000 characters to avoid huge payload while getting a good summary
                                 metadata_str = generate_tags_for_chunk(extracted_text.strip()[:20000])
-                                metadata_json = json.dumps(json.loads(metadata_str))
+                                parsed_metadata = json.loads(metadata_str)
+                                metadata_json = json.dumps(parsed_metadata)
                             except Exception as e:
                                 print(f"Failed to generate/parse document metadata JSON: {e}")
 
@@ -99,7 +105,7 @@ def get_all_documents(session_id: str = None):
         with conn.cursor() as cur:
             if session_id:
                 cur.execute("""
-                    SELECT d.id, d.filename, d.file_hash, s.source_name 
+                    SELECT d.id, d.filename, d.file_hash, s.source_name, d.metadata 
                     FROM documents d 
                     LEFT JOIN source s ON d.source_id = s.uuid 
                     WHERE d.session_id IS NULL OR d.session_id = %s
@@ -107,13 +113,43 @@ def get_all_documents(session_id: str = None):
                 """, (session_id,))
             else:
                 cur.execute("""
-                    SELECT d.id, d.filename, d.file_hash, s.source_name 
+                    SELECT d.id, d.filename, d.file_hash, s.source_name, d.metadata 
                     FROM documents d 
                     LEFT JOIN source s ON d.source_id = s.uuid 
                     ORDER BY d.id DESC
                 """)
             rows = cur.fetchall()
-    return [{"id": r[0], "filename": r[1], "file_hash": r[2], "tag": r[3] or "unknown"} for r in rows]
+    docs = []
+    for r in rows:
+        tag_str = r[3] or "unknown"
+        if 'chat' in tag_str:
+            tag_label = 'Chat Interface'
+            bg_color = '#e0e7ff'
+            text_color = '#4f46e5'
+        elif 'library' in tag_str:
+            tag_label = 'Library'
+            bg_color = '#dcfce7'
+            text_color = '#16a34a'
+        elif 'tools' in tag_str:
+            tag_label = 'Tools'
+            bg_color = '#fef3c7'
+            text_color = '#d97706'
+        else:
+            tag_label = tag_str
+            bg_color = '#f1f5f9'
+            text_color = '#64748b'
+            
+        docs.append({
+            "id": r[0],
+            "filename": r[1],
+            "file_hash": r[2],
+            "tag": tag_str,
+            "tag_label": tag_label,
+            "tag_bg_color": bg_color,
+            "tag_text_color": text_color,
+            "metadata": r[4]
+        })
+    return docs
 
 def delete_document(doc_id: int) -> bool:
     try:

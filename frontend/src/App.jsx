@@ -1,14 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Library, ChevronDown, Check, Cpu, MessageSquarePlus, Menu, Trash2, Clock } from 'lucide-react';
+import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Library, ChevronDown, Check, Cpu, MessageSquarePlus, Menu, Trash2, Clock, Database } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import './App.css';
 import DatabaseExplorer from './DatabaseExplorer';
-
 
 const BACKEND_URL = 'http://localhost:8000/api/chat';
 const UPLOAD_URL = 'http://localhost:8000/api/upload';
 const DOCUMENTS_URL = 'http://localhost:8000/api/documents';
 
 function App() {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState([
     { text: "Hello! I'm your AI assistant. How can I help you today?", sender: "bot" }
   ]);
@@ -121,7 +122,7 @@ function App() {
     // Display user message with attachment immediately (optimistic UI update)
     let displayMessage = text;
     if (selectedFile) {
-      displayMessage = text ? `[Attached File: ${selectedFile.name}]\n\n${text}` : `[Attached File: ${selectedFile.name}]`;
+      displayMessage = text ? `(Attachment: ${selectedFile.name}) ${text}` : `(Attachment: ${selectedFile.name})`;
     }
 
     setMessages(prev => [...prev, { text: displayMessage, sender: 'user' }]);
@@ -260,7 +261,7 @@ function App() {
               )}
             </div>
             <button 
-              onClick={() => setShowDbModal(true)}
+              onClick={() => navigate('/admin')}
               title="View Library"
             >
               <Library size={16} />
@@ -299,11 +300,7 @@ function App() {
           )}
         </main>
 
-        {showDbModal && (
-          <DatabaseExplorer onClose={() => setShowDbModal(false)} documentsUrl={DOCUMENTS_URL} uploadUrl={UPLOAD_URL} />
-        )}
-
-
+        {/* Admin modal removed in favor of separate page */}
 
         <footer className="chat-input-area">
           {selectedFile && (

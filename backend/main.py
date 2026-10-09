@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.routers.chat import router as chat_router
 from api.routers.documents import router as documents_router
 
-
 app = FastAPI(title="RAG AI Chat Backend")
 
 app.add_middleware(
