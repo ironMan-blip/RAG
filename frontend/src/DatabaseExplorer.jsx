@@ -7,6 +7,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
   const [documentToDelete, setDocumentToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [expandedDoc, setExpandedDoc] = useState(null);
   const libraryInputRef = useRef(null);
   const toolsInputRef = useRef(null);
 
@@ -191,8 +192,10 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
                       display: 'flex', 
                       alignItems: 'center', 
                       justifyContent: 'space-between',
-                      backgroundColor: '#fff'
+                      backgroundColor: expandedDoc === doc.id ? '#f8fafc' : '#fff',
+                      cursor: 'pointer'
                     }}
+                    onClick={() => setExpandedDoc(expandedDoc === doc.id ? null : doc.id)}
                   >
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <FileText size={20} color="#111111" style={{ marginRight: '10px' }} />
@@ -212,7 +215,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
                       </div>
                     </div>
                     <button 
-                      onClick={() => handleDeleteClick(doc)}
+                      onClick={(e) => { e.stopPropagation(); handleDeleteClick(doc); }}
                       style={{
                         background: 'none',
                         border: 'none',
@@ -228,6 +231,21 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
                       <Trash2 size={20} />
                     </button>
                   </div>
+                  {expandedDoc === doc.id && (
+                    <div style={{ padding: '15px', borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc', overflowX: 'auto' }}>
+                      <pre style={{ margin: 0, fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap' }}>
+                        {(() => {
+                          if (!doc.metadata) return 'No metadata available for this file.';
+                          try {
+                            const parsed = typeof doc.metadata === 'string' ? JSON.parse(doc.metadata) : doc.metadata;
+                            return JSON.stringify(parsed, null, 2);
+                          } catch (e) {
+                            return String(doc.metadata);
+                          }
+                        })()}
+                      </pre>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

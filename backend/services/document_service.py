@@ -105,7 +105,7 @@ def get_all_documents(session_id: str = None):
         with conn.cursor() as cur:
             if session_id:
                 cur.execute("""
-                    SELECT d.id, d.filename, d.file_hash, s.source_name 
+                    SELECT d.id, d.filename, d.file_hash, s.source_name, d.metadata 
                     FROM documents d 
                     LEFT JOIN source s ON d.source_id = s.uuid 
                     WHERE d.session_id IS NULL OR d.session_id = %s
@@ -113,7 +113,7 @@ def get_all_documents(session_id: str = None):
                 """, (session_id,))
             else:
                 cur.execute("""
-                    SELECT d.id, d.filename, d.file_hash, s.source_name 
+                    SELECT d.id, d.filename, d.file_hash, s.source_name, d.metadata 
                     FROM documents d 
                     LEFT JOIN source s ON d.source_id = s.uuid 
                     ORDER BY d.id DESC
@@ -146,7 +146,8 @@ def get_all_documents(session_id: str = None):
             "tag": tag_str,
             "tag_label": tag_label,
             "tag_bg_color": bg_color,
-            "tag_text_color": text_color
+            "tag_text_color": text_color,
+            "metadata": r[4]
         })
     return docs
 
