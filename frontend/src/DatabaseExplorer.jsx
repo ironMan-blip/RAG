@@ -284,10 +284,8 @@ export default function DatabaseExplorer({ onClose }) {
                             display: 'flex', 
                             alignItems: 'center', 
                             justifyContent: 'space-between',
-                            backgroundColor: expandedDoc === `doc-${doc.id}` ? '#f8fafc' : '#fff',
-                            cursor: 'pointer'
+                            backgroundColor: '#fff'
                           }}
-                          onClick={() => setExpandedDoc(expandedDoc === `doc-${doc.id}` ? null : `doc-${doc.id}`)}
                         >
                           <div style={{ display: 'flex', alignItems: 'center' }}>
                             <FileText size={20} color="#111111" style={{ marginRight: '10px' }} />
@@ -307,7 +305,7 @@ export default function DatabaseExplorer({ onClose }) {
                             </div>
                           </div>
                           <button 
-                            onClick={(e) => { e.stopPropagation(); handleDeleteClick(doc); }}
+                            onClick={() => handleDeleteClick(doc)}
                             style={{
                               background: 'none',
                               border: 'none',
@@ -323,13 +321,6 @@ export default function DatabaseExplorer({ onClose }) {
                             <Trash2 size={20} />
                           </button>
                         </div>
-                        {expandedDoc === `doc-${doc.id}` && (
-                          <div style={{ padding: '15px', borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc', overflowX: 'auto' }}>
-                            <pre style={{ margin: 0, fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap' }}>
-                              {doc.metadata_text}
-                            </pre>
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>

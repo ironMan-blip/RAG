@@ -17,9 +17,11 @@ CREATE TABLE IF NOT EXISTS documents (
     filename VARCHAR(255) UNIQUE NOT NULL,
     file_hash VARCHAR(255),
     source_id VARCHAR(255) REFERENCES source(uuid),
-    session_id VARCHAR(255),
-    metadata JSONB
+    session_id VARCHAR(255)
 );
+
+-- Tags live on chunks only; drop the old per-document column on existing databases
+ALTER TABLE documents DROP COLUMN IF EXISTS metadata;
 
 CREATE TABLE IF NOT EXISTS chunks (
     chunk_id SERIAL PRIMARY KEY,

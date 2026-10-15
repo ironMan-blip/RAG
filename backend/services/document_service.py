@@ -6,11 +6,8 @@ from typing import Optional
 import pypdf
 import pytesseract
 from PIL import Image
-from psycopg2.extras import Json
-
 from core.database import db_cursor
 from services.chunk_service import replace_chunks, split_text
-from services.display import format_metadata
 from services.tagging_service import generate_metadata
 
 logger = logging.getLogger(__name__)
@@ -28,9 +25,6 @@ TAG_STYLES = {
     SOURCE_IDS['library']: ('Library', '#dcfce7', '#16a34a'),
     SOURCE_IDS['tools']: ('Tools', '#fef3c7', '#d97706'),
 }
-
-# Cap on text sent to the LLM for whole-document metadata
-DOC_METADATA_CHARS = 20000
 
 
 def extract_text(content: bytes, content_type: Optional[str]) -> str:
@@ -74,20 +68,17 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
 
     # Slow work (LLM tagging) happens before the write transaction opens
     chunks = split_text(text)
-    if is_tool:
-        doc_metadata, *chunk_metadata = generate_metadata([text[:DOC_METADATA_CHARS], *chunks])
-    else:
-        doc_metadata, chunk_metadata = None, [None] * len(chunks)
+    chunk_metadata = generate_metadata(chunks) if is_tool else [None] * len(chunks)
 
     with db_cursor() as cur:
         cur.execute(
-            """INSERT INTO documents (filename, file_hash, source_id, session_id, metadata)
-               VALUES (%s, %s, %s, %s, %s)
+            """INSERT INTO documents (filename, file_hash, source_id, session_id)
+               VALUES (%s, %s, %s, %s)
                ON CONFLICT (filename) DO UPDATE SET
                    file_hash = EXCLUDED.file_hash, source_id = EXCLUDED.source_id,
-                   session_id = EXCLUDED.session_id, metadata = EXCLUDED.metadata
+                   session_id = EXCLUDED.session_id
                RETURNING id""",
-            (file_name, file_hash, source_id, session_id, Json(doc_metadata) if doc_metadata else None),
+            (file_name, file_hash, source_id, session_id),
         )
         replace_chunks(cur, cur.fetchone()[0], chunks, chunk_metadata)
 
@@ -97,14 +88,14 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
 def get_all_documents():
     with db_cursor() as cur:
         cur.execute("""
-            SELECT d.id, d.filename, d.file_hash, d.source_id, s.source_name, d.metadata
+            SELECT d.id, d.filename, d.file_hash, d.source_id, s.source_name
             FROM documents d
             LEFT JOIN source s ON d.source_id = s.uuid
             ORDER BY d.id DESC
         """)
         rows = cur.fetchall()
     docs = []
-    for doc_id, filename, file_hash, source_id, source_name, metadata in rows:
+    for doc_id, filename, file_hash, source_id, source_name in rows:
         tag = source_name or "unknown"
         label, bg_color, text_color = TAG_STYLES.get(source_id, (tag, '#f1f5f9', '#64748b'))
         docs.append({
@@ -115,8 +106,6 @@ def get_all_documents():
             "tag_label": label,
             "tag_bg_color": bg_color,
             "tag_text_color": text_color,
-            "metadata": metadata,
-            "metadata_text": format_metadata(metadata, "No metadata available for this file."),
         })
     return docs
 
