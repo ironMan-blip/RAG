@@ -27,6 +27,6 @@ async def delete_document(doc_id: int):
     return {"status": "success", "message": "Document deleted"}
 
 
-@router.get("/chunks")
-async def get_all_chunks():
-    return {"chunks": await run_in_threadpool(chunk_service.get_all_chunks)}
+@router.get("/documents/{doc_id}/chunks")
+async def get_document_chunks(doc_id: int):
+    return {"chunks": await run_in_threadpool(chunk_service.get_document_chunks, doc_id)}

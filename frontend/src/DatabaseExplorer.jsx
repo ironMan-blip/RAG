@@ -1,31 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, FileText, Database as DatabaseIcon, Trash2, AlertTriangle, Upload, LayoutList, Layers } from 'lucide-react';
+import { X, FileText, Database as DatabaseIcon, Trash2, AlertTriangle, Upload, LayoutList, Search, ChevronRight, ChevronDown } from 'lucide-react';
 import { API_BASE } from './api';
 
 export default function DatabaseExplorer({ onClose }) {
-  const [activeTab, setActiveTab] = useState('documents');
   const [documents, setDocuments] = useState([]);
-  const [chunks, setChunks] = useState([]);
   const [loadingDocs, setLoadingDocs] = useState(true);
-  const [loadingChunks, setLoadingChunks] = useState(false);
-  
+  const [search, setSearch] = useState('');
+
+  // doc id -> its chunks, fetched the first time the document is expanded
+  const [chunksByDoc, setChunksByDoc] = useState({});
+  const [expandedDocId, setExpandedDocId] = useState(null);
+  const [expandedChunkId, setExpandedChunkId] = useState(null);
+
   const [documentToDelete, setDocumentToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [expandedDoc, setExpandedDoc] = useState(null);
-  
+
   const libraryInputRef = useRef(null);
   const toolsInputRef = useRef(null);
 
   useEffect(() => {
     fetchDocuments();
   }, []);
-
-  useEffect(() => {
-    if (activeTab === 'chunks' && chunks.length === 0) {
-      fetchChunks();
-    }
-  }, [activeTab]);
 
   const fetchDocuments = async () => {
     setLoadingDocs(true);
@@ -42,23 +38,41 @@ export default function DatabaseExplorer({ onClose }) {
     }
   };
 
-  const fetchChunks = async () => {
-    setLoadingChunks(true);
+  const fetchChunks = async (docId) => {
+    setChunksByDoc(prev => ({ ...prev, [docId]: null }));
     try {
-      const res = await fetch(`${API_BASE}/chunks`, { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        setChunks(data.chunks || []);
-      }
+      const res = await fetch(`${API_BASE}/documents/${docId}/chunks`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setChunksByDoc(prev => ({ ...prev, [docId]: data.chunks || [] }));
     } catch (error) {
       console.error("Failed to fetch chunks", error);
-    } finally {
-      setLoadingChunks(false);
+      setChunksByDoc(prev => ({ ...prev, [docId]: 'error' }));
     }
   };
 
+  const toggleDocument = (docId) => {
+    setExpandedChunkId(null);
+    if (expandedDocId === docId) {
+      setExpandedDocId(null);
+      return;
+    }
+    setExpandedDocId(docId);
+    if (!Array.isArray(chunksByDoc[docId])) fetchChunks(docId);
+  };
+
   // Re-read backend state after a change instead of patching lists locally
-  const refresh = () => Promise.all([fetchDocuments(), fetchChunks()]);
+  const refresh = () => {
+    setChunksByDoc({});
+    setExpandedDocId(null);
+    setExpandedChunkId(null);
+    return fetchDocuments();
+  };
+
+  const query = search.trim().toLowerCase();
+  const visibleDocuments = query
+    ? documents.filter(doc => doc.filename.toLowerCase().includes(query))
+    : documents;
 
   const handleDeleteClick = (doc) => {
     setDocumentToDelete(doc);
@@ -207,185 +221,160 @@ export default function DatabaseExplorer({ onClose }) {
           </div>
         </div>
 
-        {/* Body Container */}
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          
-          {/* Sidebar */}
-          <div style={{
-            width: '240px',
-            backgroundColor: '#f8fafc',
-            borderRight: '1px solid #e2e8f0',
+        {/* Search */}
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+          <label style={{
             display: 'flex',
-            flexDirection: 'column',
-            padding: '20px 0'
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 12px',
+            border: '1px solid #cbd5e1',
+            borderRadius: '6px',
+            backgroundColor: '#fff'
           }}>
-            <button 
-              onClick={() => setActiveTab('documents')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px 24px',
-                backgroundColor: activeTab === 'documents' ? '#e2e8f0' : 'transparent',
-                border: 'none',
-                width: '100%',
-                textAlign: 'left',
-                cursor: 'pointer',
-                color: activeTab === 'documents' ? '#0f172a' : '#475569',
-                fontWeight: activeTab === 'documents' ? '600' : '400',
-                transition: 'background-color 0.2s'
-              }}
-            >
-              <FileText size={18} />
-              Documents
-            </button>
-            <button 
-              onClick={() => setActiveTab('chunks')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px 24px',
-                backgroundColor: activeTab === 'chunks' ? '#e2e8f0' : 'transparent',
-                border: 'none',
-                width: '100%',
-                textAlign: 'left',
-                cursor: 'pointer',
-                color: activeTab === 'chunks' ? '#0f172a' : '#475569',
-                fontWeight: activeTab === 'chunks' ? '600' : '400',
-                transition: 'background-color 0.2s'
-              }}
-            >
-              <Layers size={18} />
-              Chunks
-            </button>
-          </div>
+            <Search size={16} color="#64748b" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search documents by name..."
+              aria-label="Search documents by name"
+              style={{ flex: 1, border: 'none', outline: 'none', fontSize: '0.9rem', background: 'transparent' }}
+            />
+          </label>
+        </div>
 
-          {/* Main Content Area */}
-          <div style={{ flex: 1, padding: '20px', overflowY: 'auto', backgroundColor: '#fff' }}>
-            
-            {activeTab === 'documents' && (
-              <>
-                {loadingDocs ? (
-                  <p style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>Loading database records...</p>
-                ) : documents.length === 0 ? (
-                  <p style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>No documents found in the database.</p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {documents.map(doc => (
-                      <div key={doc.id} style={{ 
-                        backgroundColor: '#fff', 
-                        border: '1px solid #e2e8f0', 
-                        borderRadius: '8px',
-                        overflow: 'hidden'
-                      }}>
-                        <div style={{ 
-                            padding: '15px', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'space-between',
-                            backgroundColor: '#fff'
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <FileText size={20} color="#111111" style={{ marginRight: '10px' }} />
-                            <div>
-                              <div style={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '6px' }}>{doc.filename}</div>
-                              <div style={{
-                                display: 'inline-block',
-                                fontSize: '0.7rem',
-                                fontWeight: '600',
-                                padding: '2px 8px',
-                                borderRadius: '12px',
-                                backgroundColor: doc.tag_bg_color || '#e2e8f0',
-                                color: doc.tag_text_color || '#475569'
-                              }}>
-                                {doc.tag_label}
-                              </div>
-                            </div>
-                          </div>
-                          <button 
-                            onClick={() => handleDeleteClick(doc)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              padding: '5px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: '#ef4444'
-                            }}
-                            title="Delete Document"
-                          >
-                            <Trash2 size={20} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-
-            {activeTab === 'chunks' && (
-              <>
-                {loadingChunks ? (
-                  <p style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>Loading chunks...</p>
-                ) : chunks.length === 0 ? (
-                  <p style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>No chunks found in the database.</p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {chunks.map(chunk => (
-                      <div key={chunk.chunk_id} style={{ 
-                        backgroundColor: '#fff', 
-                        border: '1px solid #e2e8f0', 
-                        borderRadius: '8px',
-                        overflow: 'hidden'
-                      }}>
-                        <div style={{ 
-                            padding: '15px', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'space-between',
-                            backgroundColor: expandedDoc === `chunk-${chunk.chunk_id}` ? '#f8fafc' : '#fff',
-                            cursor: 'pointer'
-                          }}
-                          onClick={() => setExpandedDoc(expandedDoc === `chunk-${chunk.chunk_id}` ? null : `chunk-${chunk.chunk_id}`)}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <LayoutList size={20} color="#111111" style={{ marginRight: '10px' }} />
-                            <div>
-                              <div style={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '6px' }}>{chunk.title}</div>
-                              <div style={{
-                                display: 'inline-block',
-                                fontSize: '0.7rem',
-                                fontWeight: '600',
-                                padding: '2px 8px',
-                                borderRadius: '12px',
-                                backgroundColor: '#e0f2fe',
-                                color: '#0284c7'
-                              }}>
-                                {chunk.label}
-                              </div>
-                            </div>
+        {/* Document List */}
+        <div style={{ flex: 1, padding: '20px', overflowY: 'auto', backgroundColor: '#fff' }}>
+          {loadingDocs ? (
+            <p style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>Loading database records...</p>
+          ) : documents.length === 0 ? (
+            <p style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>No documents found in the database.</p>
+          ) : visibleDocuments.length === 0 ? (
+            <p style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>No documents match "{search.trim()}".</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {visibleDocuments.map(doc => {
+                const isExpanded = expandedDocId === doc.id;
+                const chunks = chunksByDoc[doc.id];
+                return (
+                  <div key={doc.id} style={{
+                    backgroundColor: '#fff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                        padding: '15px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        backgroundColor: isExpanded ? '#f8fafc' : '#fff'
+                      }}
+                    >
+                      <button
+                        onClick={() => toggleDocument(doc.id)}
+                        aria-expanded={isExpanded}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          flex: 1,
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          font: 'inherit'
+                        }}
+                      >
+                        {isExpanded ? <ChevronDown size={18} color="#64748b" /> : <ChevronRight size={18} color="#64748b" />}
+                        <FileText size={20} color="#111111" style={{ margin: '0 10px 0 6px' }} />
+                        <div>
+                          <div style={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '6px' }}>{doc.filename}</div>
+                          <div style={{
+                            display: 'inline-block',
+                            fontSize: '0.7rem',
+                            fontWeight: '600',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            backgroundColor: doc.tag_bg_color || '#e2e8f0',
+                            color: doc.tag_text_color || '#475569'
+                          }}>
+                            {doc.tag_label}
                           </div>
                         </div>
-                        {expandedDoc === `chunk-${chunk.chunk_id}` && (
-                          <div style={{ padding: '15px', borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
-                            <pre style={{ margin: 0, fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: '#f1f5f9', padding: '10px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
-                              {chunk.metadata_text}
-                            </pre>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(doc)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '5px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#ef4444'
+                        }}
+                        title="Delete Document"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+
+                    {isExpanded && (
+                      <div style={{ padding: '12px 15px 15px 44px', borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                        {chunks == null ? (
+                          <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>Loading chunks...</p>
+                        ) : chunks === 'error' ? (
+                          <p style={{ margin: 0, color: '#ef4444', fontSize: '0.875rem' }}>Failed to load chunks.</p>
+                        ) : chunks.length === 0 ? (
+                          <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>This document has no chunks.</p>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {chunks.map(chunk => {
+                              const isChunkExpanded = expandedChunkId === chunk.chunk_id;
+                              return (
+                                <div key={chunk.chunk_id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', backgroundColor: '#fff', overflow: 'hidden' }}>
+                                  <button
+                                    onClick={() => setExpandedChunkId(isChunkExpanded ? null : chunk.chunk_id)}
+                                    aria-expanded={isChunkExpanded}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '8px',
+                                      width: '100%',
+                                      padding: '10px 12px',
+                                      background: 'none',
+                                      border: 'none',
+                                      textAlign: 'left',
+                                      cursor: 'pointer',
+                                      font: 'inherit',
+                                      fontSize: '0.875rem',
+                                      color: '#1e293b'
+                                    }}
+                                  >
+                                    {isChunkExpanded ? <ChevronDown size={16} color="#64748b" /> : <ChevronRight size={16} color="#64748b" />}
+                                    <LayoutList size={16} color="#111111" />
+                                    {chunk.label}
+                                  </button>
+                                  {isChunkExpanded && (
+                                    <pre style={{ margin: 0, fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: '#f1f5f9', padding: '10px', borderTop: '1px solid #e2e8f0' }}>
+                                      {chunk.metadata_text}
+                                    </pre>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
-              </>
-            )}
-
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
