@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
 CREATE TABLE IF NOT EXISTS source (
     uuid VARCHAR(255) PRIMARY KEY,
     source_name VARCHAR(255) NOT NULL
@@ -26,6 +28,8 @@ CREATE TABLE IF NOT EXISTS chunks (
     chunk_embedding vector(384),
     metadata JSONB
 );
+
+CREATE INDEX IF NOT EXISTS chunks_doc_id_idx ON chunks (doc_id);
 
 CREATE TABLE IF NOT EXISTS chats (
     id VARCHAR(255) PRIMARY KEY,

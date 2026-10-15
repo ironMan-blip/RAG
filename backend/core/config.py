@@ -12,4 +12,8 @@ class Settings:
     LLM_MODEL3: str = os.getenv("LLM_MODEL3", "")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
+    @property
+    def chat_models(self) -> list[str]:
+        return [m for m in (self.LLM_MODEL1, self.LLM_MODEL2, self.LLM_MODEL3) if m]
+
 settings = Settings()

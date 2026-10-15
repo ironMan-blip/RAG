@@ -1,78 +1,58 @@
-from core.database import get_db_connection
-from typing import List, Tuple
+import logging
 
-def get_recent_chat_history(session_id: str, limit: int = 5) -> List[Tuple[str, str]]:
+from core.database import db_cursor
+
+logger = logging.getLogger(__name__)
+
+GREETING = {"sender": "bot", "text": "Hello! I'm your AI assistant. How can I help you today?"}
+
+
+def get_recent_chat_history(session_id: str, limit: int = 5) -> list[tuple[str, str]]:
+    """Last `limit` (user, bot) turns, oldest first. Best-effort: [] on DB error."""
     if not session_id:
         return []
     try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT user_message, bot_reply FROM chat_history WHERE session_id = %s ORDER BY created_at DESC LIMIT %s",
-                    (session_id, limit)
-                )
-                rows = cur.fetchall()
-                if rows:
-                    rows.reverse()
-                    return rows
-    except Exception as e:
-        print(f"Error fetching chat history: {e}")
-    return []
+        with db_cursor() as cur:
+            cur.execute(
+                "SELECT user_message, bot_reply FROM chat_history WHERE session_id = %s ORDER BY created_at DESC LIMIT %s",
+                (session_id, limit)
+            )
+            return cur.fetchall()[::-1]
+    except Exception:
+        logger.exception("Error fetching chat history")
+        return []
+
 
 def save_chat_history(session_id: str, message: str, bot_reply: str, model: str, chat_title: str = None):
-    if not session_id:
-        return
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO chats (id, name) VALUES (%s, %s) ON CONFLICT (id) DO NOTHING",
-                    (session_id, chat_title or "New Chat")
-                )
-                    
-                cur.execute(
-                    "INSERT INTO chat_history (session_id, user_message, bot_reply, model) VALUES (%s, %s, %s, %s)",
-                    (session_id, message, bot_reply, model)
-                )
-            conn.commit()
-    except Exception as e:
-        print(f"Error saving chat history: {e}")
+    with db_cursor() as cur:
+        cur.execute(
+            "INSERT INTO chats (id, name) VALUES (%s, %s) ON CONFLICT (id) DO NOTHING",
+            (session_id, chat_title or "New Chat")
+        )
+        cur.execute(
+            "INSERT INTO chat_history (session_id, user_message, bot_reply, model) VALUES (%s, %s, %s, %s)",
+            (session_id, message, bot_reply, model)
+        )
+
 
 def get_all_chats():
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT id, name, created_at FROM chats ORDER BY created_at DESC")
-                rows = cur.fetchall()
-                return [{"id": row[0], "name": row[1], "created_at": row[2]} for row in rows]
-    except Exception as e:
-        print(f"Error getting chats: {e}")
-        return []
+    with db_cursor() as cur:
+        cur.execute("SELECT id, name, created_at FROM chats ORDER BY created_at DESC")
+        return [{"id": id, "name": name or "New Chat", "created_at": created_at} for id, name, created_at in cur.fetchall()]
+
 
 def get_full_chat_history(session_id: str):
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT user_message, bot_reply FROM chat_history WHERE session_id = %s ORDER BY created_at ASC", (session_id,))
-                rows = cur.fetchall()
-                
-                # Logic moved to backend: Default fallback message is always included
-                history = [{"sender": "bot", "text": "Hello! I'm your AI assistant. How can I help you today?"}]
-                for row in rows:
-                    history.append({"sender": "user", "text": row[0]})
-                    history.append({"sender": "bot", "text": row[1]})
-                return history
-    except Exception as e:
-        print(f"Error getting full chat history: {e}")
-        return [{"sender": "bot", "text": "Hello! I'm your AI assistant. How can I help you today?"}]
+    with db_cursor() as cur:
+        cur.execute("SELECT user_message, bot_reply FROM chat_history WHERE session_id = %s ORDER BY created_at ASC", (session_id,))
+        rows = cur.fetchall()
+    history = [GREETING]
+    for user_message, bot_reply in rows:
+        history.append({"sender": "user", "text": user_message})
+        history.append({"sender": "bot", "text": bot_reply})
+    return history
+
 
 def delete_chat_by_id(session_id: str):
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM chats WHERE id = %s", (session_id,))
-            conn.commit()
-        return True
-    except Exception as e:
-        print(f"Error deleting chat: {e}")
-        return False
+    # chat_history rows go with it via ON DELETE CASCADE
+    with db_cursor() as cur:
+        cur.execute("DELETE FROM chats WHERE id = %s", (session_id,))

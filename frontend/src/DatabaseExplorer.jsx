@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, FileText, Database as DatabaseIcon, Trash2, AlertTriangle, Upload, LayoutList, Layers } from 'lucide-react';
+import { API_BASE } from './api';
 
-export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
+export default function DatabaseExplorer({ onClose }) {
   const [activeTab, setActiveTab] = useState('documents');
   const [documents, setDocuments] = useState([]);
   const [chunks, setChunks] = useState([]);
@@ -29,7 +30,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
   const fetchDocuments = async () => {
     setLoadingDocs(true);
     try {
-      const res = await fetch(documentsUrl, { cache: "no-store" });
+      const res = await fetch(`${API_BASE}/documents`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setDocuments(data.documents || []);
@@ -44,8 +45,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
   const fetchChunks = async () => {
     setLoadingChunks(true);
     try {
-      const chunksUrl = documentsUrl.replace('/documents', '/chunks');
-      const res = await fetch(chunksUrl, { cache: "no-store" });
+      const res = await fetch(`${API_BASE}/chunks`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setChunks(data.chunks || []);
@@ -57,6 +57,9 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
     }
   };
 
+  // Re-read backend state after a change instead of patching lists locally
+  const refresh = () => Promise.all([fetchDocuments(), fetchChunks()]);
+
   const handleDeleteClick = (doc) => {
     setDocumentToDelete(doc);
   };
@@ -65,12 +68,10 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
     if (!documentToDelete) return;
     setIsDeleting(true);
     try {
-      const deleteUrl = `${documentsUrl}/${documentToDelete.id}`;
-      const res = await fetch(deleteUrl, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/documents/${documentToDelete.id}`, { method: 'DELETE' });
       if (res.ok) {
-        setDocuments(documents.filter(doc => doc.id !== documentToDelete.id));
-        setChunks(chunks.filter(chunk => chunk.doc_id !== documentToDelete.id));
         setDocumentToDelete(null);
+        await refresh();
       } else {
         alert("Failed to delete document.");
       }
@@ -92,16 +93,13 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
       formData.append('file', file);
       if (source) formData.append('source', source);
       
-      const res = await fetch(uploadUrl, {
+      const res = await fetch(`${API_BASE}/upload`, {
         method: 'POST',
         body: formData,
       });
 
       if (res.ok) {
-        await fetchDocuments();
-        if (activeTab === 'chunks' || chunks.length > 0) {
-           await fetchChunks();
-        }
+        await refresh();
       } else {
         alert("Failed to upload document.");
       }
@@ -304,7 +302,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
                                 backgroundColor: doc.tag_bg_color || '#e2e8f0',
                                 color: doc.tag_text_color || '#475569'
                               }}>
-                                {doc.tag_label || doc.tag || 'Document'}
+                                {doc.tag_label}
                               </div>
                             </div>
                           </div>
@@ -328,15 +326,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
                         {expandedDoc === `doc-${doc.id}` && (
                           <div style={{ padding: '15px', borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc', overflowX: 'auto' }}>
                             <pre style={{ margin: 0, fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap' }}>
-                              {(() => {
-                                if (!doc.metadata) return 'No metadata available for this file.';
-                                try {
-                                  const parsed = typeof doc.metadata === 'string' ? JSON.parse(doc.metadata) : doc.metadata;
-                                  return JSON.stringify(parsed, null, 2);
-                                } catch (e) {
-                                  return String(doc.metadata);
-                                }
-                              })()}
+                              {doc.metadata_text}
                             </pre>
                           </div>
                         )}
@@ -375,7 +365,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
                           <div style={{ display: 'flex', alignItems: 'center' }}>
                             <LayoutList size={20} color="#111111" style={{ marginRight: '10px' }} />
                             <div>
-                              <div style={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '6px' }}>{chunk.filename || `Document ${chunk.doc_id}`}</div>
+                              <div style={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '6px' }}>{chunk.title}</div>
                               <div style={{
                                 display: 'inline-block',
                                 fontSize: '0.7rem',
@@ -385,7 +375,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
                                 backgroundColor: '#e0f2fe',
                                 color: '#0284c7'
                               }}>
-                                Chunk {chunk.chunk_id}
+                                {chunk.label}
                               </div>
                             </div>
                           </div>
@@ -397,15 +387,7 @@ export default function DatabaseExplorer({ onClose, documentsUrl, uploadUrl }) {
                             </div>
                             <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#1e293b', marginBottom: '8px' }}>Metadata:</div>
                             <pre style={{ margin: 0, fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: '#f1f5f9', padding: '10px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
-                              {(() => {
-                                if (!chunk.metadata) return 'No metadata available for this chunk.';
-                                try {
-                                  const parsed = typeof chunk.metadata === 'string' ? JSON.parse(chunk.metadata) : chunk.metadata;
-                                  return JSON.stringify(parsed, null, 2);
-                                } catch (e) {
-                                  return String(chunk.metadata);
-                                }
-                              })()}
+                              {chunk.metadata_text}
                             </pre>
                           </div>
                         )}
