@@ -2,21 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Library, ChevronDown, Check, Cpu, MessageSquarePlus, Menu, Trash2, Clock, Database } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import './App.css';
-import DatabaseExplorer from './DatabaseExplorer';
-
-const BACKEND_URL = 'http://localhost:8000/api/chat';
-const UPLOAD_URL = 'http://localhost:8000/api/upload';
-const DOCUMENTS_URL = 'http://localhost:8000/api/documents';
+import { API_BASE } from './api';
 
 function App() {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState([
-    { text: "Hello! I'm your AI assistant. How can I help you today?", sender: "bot" }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [showDbModal, setShowDbModal] = useState(false);
   const [selectedModel, setSelectedModel] = useState("");
   const [availableModels, setAvailableModels] = useState([]);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
@@ -40,10 +33,15 @@ function App() {
   const fileInputRef = useRef(null);
 
   const startNewChat = () => {
-    setMessages([{ text: "Hello! I'm your AI assistant. How can I help you today?", sender: "bot" }]);
     setInputValue("");
     setSelectedFile(null);
-    setChatId(null);
+    fetch(`${API_BASE}/chats`, { method: 'POST' })
+      .then(res => res.json())
+      .then(data => {
+        setChatId(data.session_id);
+        setMessages(data.history);
+      })
+      .catch(err => console.error("Failed to start chat:", err));
   };
 
   const handleFileSelect = (event) => {
@@ -63,6 +61,7 @@ function App() {
 
   useEffect(() => {
     fetchChatSessions();
+    startNewChat();
   }, []);
 
   useEffect(() => {
@@ -70,20 +69,18 @@ function App() {
   }, [messages, isLoading]);
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/models')
+    fetch(`${API_BASE}/models`)
       .then(res => res.json())
       .then(data => {
-        if (data.models && data.models.length > 0) {
-          setAvailableModels(data.models);
-          setSelectedModel(data.models[0].value);
-        }
+        setAvailableModels(data.models);
+        setSelectedModel(data.default || "");
       })
       .catch(err => console.error("Failed to fetch models:", err));
   }, []);
 
 
   const fetchChatSessions = () => {
-    fetch('http://localhost:8000/api/chats', { cache: 'no-store' })
+    fetch(`${API_BASE}/chats`, { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         if (data.chats) setChatSessions(data.chats);
@@ -92,12 +89,11 @@ function App() {
   };
 
   const loadChat = (id) => {
-    fetch(`http://localhost:8000/api/chats/${id}`)
+    fetch(`${API_BASE}/chats/${id}`)
       .then(res => res.json())
       .then(data => {
         if (data.history) {
           setChatId(id);
-          // Backend now formats the history properly and includes the default greeting
           setMessages(data.history);
           setIsSidebarOpen(false);
         }
@@ -107,7 +103,7 @@ function App() {
 
   const deleteChat = (id, e) => {
     e.stopPropagation();
-    fetch(`http://localhost:8000/api/chats/${id}`, { method: 'DELETE' })
+    fetch(`${API_BASE}/chats/${id}`, { method: 'DELETE' })
       .then(() => {
         fetchChatSessions();
         if (chatId === id) startNewChat();
@@ -119,13 +115,8 @@ function App() {
     const text = inputValue.trim();
     if (!text && !selectedFile) return;
 
-    // Display user message with attachment immediately (optimistic UI update)
-    let displayMessage = text;
-    if (selectedFile) {
-      displayMessage = text ? `(Attachment: ${selectedFile.name}) ${text}` : `(Attachment: ${selectedFile.name})`;
-    }
-
-    setMessages(prev => [...prev, { text: displayMessage, sender: 'user' }]);
+    // Show the raw input until the backend returns the stored version of this turn
+    setMessages(prev => [...prev, { text: text || selectedFile.name, sender: 'user', pending: true }]);
     setInputValue("");
     
     const fileToUpload = selectedFile;
@@ -139,7 +130,7 @@ function App() {
       if (chatId) formData.append('session_id', chatId);
       if (fileToUpload) formData.append('file', fileToUpload);
 
-      const response = await fetch(BACKEND_URL, {
+      const response = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         // Note: Do not set Content-Type header when using FormData, 
         // the browser will automatically set it to multipart/form-data with boundary
@@ -151,18 +142,15 @@ function App() {
       }
 
       const data = await response.json();
-      const botReply = data.reply || data.response || data.message || "No response field found in JSON.";
-      
-      if (data.session_id && !chatId) {
-        setChatId(data.session_id);
-      }
-      
+      setChatId(data.session_id);
       fetchChatSessions();
-      
-      setMessages(prev => [...prev, { text: botReply, sender: 'bot' }]);
+      setMessages(prev => [...prev.filter(m => !m.pending), ...data.messages]);
     } catch (error) {
       console.error('Error:', error);
-      setMessages(prev => [...prev, { text: 'Sorry, there was an error processing your request.', sender: 'bot' }]);
+      setMessages(prev => [
+        ...prev.map(m => ({ ...m, pending: false })),
+        { text: 'Sorry, there was an error processing your request.', sender: 'bot' }
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -202,7 +190,7 @@ function App() {
                 onClick={() => loadChat(session.id)}
               >
                 <Clock size={16} className="history-icon" />
-                <span className="chat-id" title={session.id}>{session.name || session.id.substring(0, 8) + '...'}</span>
+                <span className="chat-id" title={session.id}>{session.name}</span>
                 <button className="delete-btn" onClick={(e) => deleteChat(session.id, e)}>
                   <Trash2 size={14} />
                 </button>

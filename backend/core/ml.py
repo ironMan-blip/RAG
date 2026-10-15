@@ -1,8 +1,4 @@
-try:
-    from sentence_transformers import SentenceTransformer
-    # Load model (dimension 384)
-    embedder = SentenceTransformer("all-MiniLM-L6-v2")
-except ImportError:
-    embedder = None
-    print("sentence_transformers not installed.")
+from sentence_transformers import SentenceTransformer
 
+# 384-dim embeddings; must match chunks.chunk_embedding in schema.sql
+embedder = SentenceTransformer("all-MiniLM-L6-v2")

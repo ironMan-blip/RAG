@@ -1,27 +1,27 @@
+import logging
+from contextlib import contextmanager
+
 from psycopg2.pool import ThreadedConnectionPool
+
 from core.config import settings
+
+logger = logging.getLogger(__name__)
 
 pool = None
 try:
     pool = ThreadedConnectionPool(1, 20, settings.DATABASE_URL)
-except Exception as e:
-    print(f"Error creating connection pool: {e}")
+except Exception:
+    logger.exception("Error creating connection pool")
 
-class PooledConnection:
-    def __init__(self, pool):
-        if not pool:
-            raise Exception("Database connection pool is not initialized.")
-        self.pool = pool
-        self.conn = self.pool.getconn()
 
-    def __enter__(self):
-        self.conn.__enter__()
-        return self.conn
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.conn.__exit__(exc_type, exc_val, exc_tb)
-        self.pool.putconn(self.conn)
-
-def get_db_connection():
-    """Provides a database connection from the pool."""
-    return PooledConnection(pool)
+@contextmanager
+def db_cursor():
+    """Yield a pooled cursor in one transaction: commit on success, roll back on error."""
+    if pool is None:
+        raise RuntimeError("Database connection pool is not initialized.")
+    conn = pool.getconn()
+    try:
+        with conn, conn.cursor() as cur:
+            yield cur
+    finally:
+        pool.putconn(conn)

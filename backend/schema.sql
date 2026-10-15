@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
 CREATE TABLE IF NOT EXISTS source (
     uuid VARCHAR(255) PRIMARY KEY,
     source_name VARCHAR(255) NOT NULL
@@ -15,9 +17,11 @@ CREATE TABLE IF NOT EXISTS documents (
     filename VARCHAR(255) UNIQUE NOT NULL,
     file_hash VARCHAR(255),
     source_id VARCHAR(255) REFERENCES source(uuid),
-    session_id VARCHAR(255),
-    metadata JSONB
+    session_id VARCHAR(255)
 );
+
+-- Tags live on chunks only; drop the old per-document column on existing databases
+ALTER TABLE documents DROP COLUMN IF EXISTS metadata;
 
 CREATE TABLE IF NOT EXISTS chunks (
     chunk_id SERIAL PRIMARY KEY,
@@ -26,6 +30,8 @@ CREATE TABLE IF NOT EXISTS chunks (
     chunk_embedding vector(384),
     metadata JSONB
 );
+
+CREATE INDEX IF NOT EXISTS chunks_doc_id_idx ON chunks (doc_id);
 
 CREATE TABLE IF NOT EXISTS chats (
     id VARCHAR(255) PRIMARY KEY,

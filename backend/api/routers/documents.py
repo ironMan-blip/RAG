@@ -1,63 +1,43 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from services.document_service import (
-    process_and_save_document,
-    get_all_documents as fetch_all_documents,
-    delete_document as remove_doc
-)
-from services.chunk_service import get_all_chunks as fetch_all_chunks
+
+from services import chunk_service, document_service
 
 router = APIRouter()
 
+
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...), source: str = Form('library')):
-    uuid_map = {
-        'library': '79279d88-e2c3-4a36-9da6-3f02dd71796b',
-        'tools': 'b8118424-5418-47b7-a661-8bb768aa8ef5',
-        'chat': '20a26963-d20c-469f-8837-620321d589a6'
-    }
-    actual_source_id = uuid_map.get(source, source)
-    try:
-        content = await file.read()
-        upload_message, extracted_text = await run_in_threadpool(
-            process_and_save_document, 
-            file.filename, 
-            content, 
-            file.content_type, 
-            actual_source_id
-        )
-        return {"filename": file.filename, "status": "success", "message": upload_message, "extracted_text": extracted_text}
-    except Exception as e:
-        print(f"File upload failed: {e}")
-        raise HTTPException(status_code=500, detail="File upload failed")
+    source_id = document_service.SOURCE_IDS.get(source, source)
+    upload_message, extracted_text = await run_in_threadpool(
+        document_service.process_and_save_document, file.filename, await file.read(), file.content_type, source_id
+    )
+    return {"filename": file.filename, "status": "success", "message": upload_message, "extracted_text": extracted_text}
+
 
 @router.get("/documents")
 async def get_all_documents():
-    try:
-        docs = await run_in_threadpool(fetch_all_documents)
-        return {"documents": docs}
-    except Exception as e:
-        print(f"Failed to fetch documents: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch documents")
+    return {"documents": await run_in_threadpool(document_service.get_all_documents)}
+
 
 @router.delete("/documents/{doc_id}")
 async def delete_document(doc_id: int):
-    try:
-        success = await run_in_threadpool(remove_doc, doc_id)
-        if success:
-            return {"status": "success", "message": "Document deleted"}
+    if not await run_in_threadpool(document_service.delete_document, doc_id):
         raise HTTPException(status_code=404, detail="Document not found")
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Failed to delete document: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete document")
+    return {"status": "success", "message": "Document deleted"}
 
-@router.get("/chunks")
-async def get_all_chunks():
+
+@router.get("/documents/{doc_id}/chunks")
+async def get_document_chunks(doc_id: int):
+    return {"chunks": await run_in_threadpool(chunk_service.get_document_chunks, doc_id)}
+
+
+@router.post("/chunks/{chunk_id}/tags")
+async def regenerate_chunk_tags(chunk_id: int):
     try:
-        chunks = await run_in_threadpool(fetch_all_chunks)
-        return {"chunks": chunks}
-    except Exception as e:
-        print(f"Failed to fetch chunks: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch chunks")
+        metadata_text = await run_in_threadpool(chunk_service.regenerate_chunk_metadata, chunk_id)
+    except chunk_service.TaggingFailed:
+        raise HTTPException(status_code=502, detail="Tag generation failed")
+    if metadata_text is None:
+        raise HTTPException(status_code=404, detail="Chunk not found")
+    return {"chunk_id": chunk_id, "metadata_text": metadata_text}
