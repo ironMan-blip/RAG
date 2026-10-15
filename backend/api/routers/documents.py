@@ -30,3 +30,14 @@ async def delete_document(doc_id: int):
 @router.get("/documents/{doc_id}/chunks")
 async def get_document_chunks(doc_id: int):
     return {"chunks": await run_in_threadpool(chunk_service.get_document_chunks, doc_id)}
+
+
+@router.post("/chunks/{chunk_id}/tags")
+async def regenerate_chunk_tags(chunk_id: int):
+    try:
+        metadata_text = await run_in_threadpool(chunk_service.regenerate_chunk_metadata, chunk_id)
+    except chunk_service.TaggingFailed:
+        raise HTTPException(status_code=502, detail="Tag generation failed")
+    if metadata_text is None:
+        raise HTTPException(status_code=404, detail="Chunk not found")
+    return {"chunk_id": chunk_id, "metadata_text": metadata_text}

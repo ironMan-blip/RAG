@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, FileText, Database as DatabaseIcon, Trash2, AlertTriangle, Upload, LayoutList, Search, ChevronRight, ChevronDown } from 'lucide-react';
+import { X, FileText, Database as DatabaseIcon, Trash2, AlertTriangle, Upload, LayoutList, Search, ChevronRight, ChevronDown, RefreshCw } from 'lucide-react';
 import { API_BASE } from './api';
 
 export default function DatabaseExplorer({ onClose }) {
@@ -11,6 +11,7 @@ export default function DatabaseExplorer({ onClose }) {
   const [chunksByDoc, setChunksByDoc] = useState({});
   const [expandedDocId, setExpandedDocId] = useState(null);
   const [expandedChunkId, setExpandedChunkId] = useState(null);
+  const [regeneratingChunkIds, setRegeneratingChunkIds] = useState(new Set());
 
   const [documentToDelete, setDocumentToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -48,6 +49,28 @@ export default function DatabaseExplorer({ onClose }) {
     } catch (error) {
       console.error("Failed to fetch chunks", error);
       setChunksByDoc(prev => ({ ...prev, [docId]: 'error' }));
+    }
+  };
+
+  const regenerateTags = async (docId, chunkId) => {
+    setRegeneratingChunkIds(prev => new Set(prev).add(chunkId));
+    try {
+      const res = await fetch(`${API_BASE}/chunks/${chunkId}/tags`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { metadata_text } = await res.json();
+      setChunksByDoc(prev => Array.isArray(prev[docId]) ? {
+        ...prev,
+        [docId]: prev[docId].map(c => c.chunk_id === chunkId ? { ...c, metadata_text } : c)
+      } : prev);
+    } catch (error) {
+      console.error("Failed to regenerate tags", error);
+      alert("Failed to regenerate tags.");
+    } finally {
+      setRegeneratingChunkIds(prev => {
+        const next = new Set(prev);
+        next.delete(chunkId);
+        return next;
+      });
     }
   };
 
@@ -334,6 +357,7 @@ export default function DatabaseExplorer({ onClose }) {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             {chunks.map(chunk => {
                               const isChunkExpanded = expandedChunkId === chunk.chunk_id;
+                              const isRegenerating = regeneratingChunkIds.has(chunk.chunk_id);
                               return (
                                 <div key={chunk.chunk_id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', backgroundColor: '#fff', overflow: 'hidden' }}>
                                   <button
@@ -359,9 +383,31 @@ export default function DatabaseExplorer({ onClose }) {
                                     {chunk.label}
                                   </button>
                                   {isChunkExpanded && (
-                                    <pre style={{ margin: 0, fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: '#f1f5f9', padding: '10px', borderTop: '1px solid #e2e8f0' }}>
-                                      {chunk.metadata_text}
-                                    </pre>
+                                    <div style={{ position: 'relative', borderTop: '1px solid #e2e8f0' }}>
+                                      <button
+                                        onClick={() => regenerateTags(doc.id, chunk.chunk_id)}
+                                        disabled={isRegenerating}
+                                        title="Regenerate tags"
+                                        aria-label="Regenerate tags"
+                                        style={{
+                                          position: 'absolute',
+                                          top: '6px',
+                                          right: '6px',
+                                          display: 'flex',
+                                          padding: '5px',
+                                          background: '#fff',
+                                          border: '1px solid #cbd5e1',
+                                          borderRadius: '6px',
+                                          cursor: isRegenerating ? 'not-allowed' : 'pointer',
+                                          opacity: isRegenerating ? 0.6 : 1
+                                        }}
+                                      >
+                                        <RefreshCw size={14} color="#475569" style={isRegenerating ? { animation: 'spin 1s linear infinite' } : undefined} />
+                                      </button>
+                                      <pre style={{ margin: 0, fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: '#f1f5f9', padding: '10px 40px 10px 10px' }}>
+                                        {chunk.metadata_text}
+                                      </pre>
+                                    </div>
                                   )}
                                 </div>
                               );
