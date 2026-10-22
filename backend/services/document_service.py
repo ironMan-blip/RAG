@@ -91,14 +91,17 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
     return f"File {file_name} uploaded successfully and saved to database", text
 
 
-def get_all_documents():
+def get_all_documents(search: str = ""):
+    # Escape LIKE wildcards so the search matches the filename text literally
+    pattern = "%" + search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     with db_cursor() as cur:
         cur.execute("""
             SELECT d.id, d.filename, d.file_hash, d.source_id, s.source_name, d.metadata
             FROM documents d
             LEFT JOIN source s ON d.source_id = s.uuid
+            WHERE d.filename ILIKE %s
             ORDER BY d.id DESC
-        """)
+        """, (pattern,))
         rows = cur.fetchall()
     docs = []
     for doc_id, filename, file_hash, source_id, source_name, metadata in rows:

@@ -20,14 +20,19 @@ export default function DatabaseExplorer({ onClose }) {
   const libraryInputRef = useRef(null);
   const toolsInputRef = useRef(null);
 
+  const query = search.trim();
+
+  // Backend filters by name; debounce so typing doesn't fire a request per key
   useEffect(() => {
-    fetchDocuments();
-  }, []);
+    const timer = setTimeout(fetchDocuments, 250);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   const fetchDocuments = async () => {
     setLoadingDocs(true);
     try {
-      const res = await fetch(`${API_BASE}/documents`, { cache: "no-store" });
+      const params = new URLSearchParams({ q: query });
+      const res = await fetch(`${API_BASE}/documents?${params}`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setDocuments(data.documents || []);
@@ -91,11 +96,6 @@ export default function DatabaseExplorer({ onClose }) {
     setExpandedChunkId(null);
     return fetchDocuments();
   };
-
-  const query = search.trim().toLowerCase();
-  const visibleDocuments = query
-    ? documents.filter(doc => doc.filename.toLowerCase().includes(query))
-    : documents;
 
   const handleDeleteClick = (doc) => {
     setDocumentToDelete(doc);
@@ -272,12 +272,12 @@ export default function DatabaseExplorer({ onClose }) {
           {loadingDocs ? (
             <p style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>Loading database records...</p>
           ) : documents.length === 0 ? (
-            <p style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>No documents found in the database.</p>
-          ) : visibleDocuments.length === 0 ? (
-            <p style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>No documents match "{search.trim()}".</p>
+            <p style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>
+              {query ? `No documents match "${query}".` : 'No documents found in the database.'}
+            </p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {visibleDocuments.map(doc => {
+              {documents.map(doc => {
                 const isExpanded = expandedDocId === doc.id;
                 const chunks = chunksByDoc[doc.id];
                 return (

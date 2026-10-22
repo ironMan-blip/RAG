@@ -16,8 +16,8 @@ async def upload_file(file: UploadFile = File(...), source: str = Form('library'
 
 
 @router.get("/documents")
-async def get_all_documents():
-    return {"documents": await run_in_threadpool(document_service.get_all_documents)}
+async def get_all_documents(q: str = ""):
+    return {"documents": await run_in_threadpool(document_service.get_all_documents, q)}
 
 
 @router.delete("/documents/{doc_id}")
