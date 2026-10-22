@@ -17,11 +17,12 @@ CREATE TABLE IF NOT EXISTS documents (
     filename VARCHAR(255) UNIQUE NOT NULL,
     file_hash VARCHAR(255),
     source_id VARCHAR(255) REFERENCES source(uuid),
-    session_id VARCHAR(255)
+    session_id VARCHAR(255),
+    metadata JSONB
 );
 
--- Tags live on chunks only; drop the old per-document column on existing databases
-ALTER TABLE documents DROP COLUMN IF EXISTS metadata;
+-- Document-level metadata (year, grade, subject, topic, subtopic); add on existing databases
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS metadata JSONB;
 
 CREATE TABLE IF NOT EXISTS chunks (
     chunk_id SERIAL PRIMARY KEY,

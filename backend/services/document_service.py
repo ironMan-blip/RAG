@@ -6,9 +6,12 @@ from typing import Optional
 import pypdf
 import pytesseract
 from PIL import Image
+from psycopg2.extras import Json
+
 from core.database import db_cursor
 from services.chunk_service import replace_chunks, split_text
-from services.tagging_service import generate_metadata
+from services.display import format_metadata
+from services.tagging_service import generate_chunk_tags, generate_document_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -68,19 +71,22 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
 
     # Slow work (LLM tagging) happens before the write transaction opens
     chunks = split_text(text)
-    chunk_metadata = generate_metadata(chunks) if is_tool else [None] * len(chunks)
+    if is_tool:
+        doc_metadata, chunk_tags = generate_document_metadata(text), generate_chunk_tags(chunks)
+    else:
+        doc_metadata, chunk_tags = None, [None] * len(chunks)
 
     with db_cursor() as cur:
         cur.execute(
-            """INSERT INTO documents (filename, file_hash, source_id, session_id)
-               VALUES (%s, %s, %s, %s)
+            """INSERT INTO documents (filename, file_hash, source_id, session_id, metadata)
+               VALUES (%s, %s, %s, %s, %s)
                ON CONFLICT (filename) DO UPDATE SET
                    file_hash = EXCLUDED.file_hash, source_id = EXCLUDED.source_id,
-                   session_id = EXCLUDED.session_id
+                   session_id = EXCLUDED.session_id, metadata = EXCLUDED.metadata
                RETURNING id""",
-            (file_name, file_hash, source_id, session_id),
+            (file_name, file_hash, source_id, session_id, Json(doc_metadata) if doc_metadata else None),
         )
-        replace_chunks(cur, cur.fetchone()[0], chunks, chunk_metadata)
+        replace_chunks(cur, cur.fetchone()[0], chunks, chunk_tags)
 
     return f"File {file_name} uploaded successfully and saved to database", text
 
@@ -88,14 +94,14 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
 def get_all_documents():
     with db_cursor() as cur:
         cur.execute("""
-            SELECT d.id, d.filename, d.file_hash, d.source_id, s.source_name
+            SELECT d.id, d.filename, d.file_hash, d.source_id, s.source_name, d.metadata
             FROM documents d
             LEFT JOIN source s ON d.source_id = s.uuid
             ORDER BY d.id DESC
         """)
         rows = cur.fetchall()
     docs = []
-    for doc_id, filename, file_hash, source_id, source_name in rows:
+    for doc_id, filename, file_hash, source_id, source_name, metadata in rows:
         tag = source_name or "unknown"
         label, bg_color, text_color = TAG_STYLES.get(source_id, (tag, '#f1f5f9', '#64748b'))
         docs.append({
@@ -106,6 +112,7 @@ def get_all_documents():
             "tag_label": label,
             "tag_bg_color": bg_color,
             "tag_text_color": text_color,
+            "metadata_text": format_metadata(metadata, "No metadata available for this document."),
         })
     return docs
 

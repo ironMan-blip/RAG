@@ -347,6 +347,9 @@ export default function DatabaseExplorer({ onClose }) {
 
                     {isExpanded && (
                       <div style={{ padding: '12px 15px 15px 44px', borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                        <pre style={{ margin: '0 0 10px', fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: '#f1f5f9', padding: '10px', borderRadius: '6px' }}>
+                          {doc.metadata_text}
+                        </pre>
                         {chunks == null ? (
                           <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>Loading chunks...</p>
                         ) : chunks === 'error' ? (
