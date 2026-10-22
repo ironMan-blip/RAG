@@ -28,7 +28,7 @@ pillow==11.3.0
 psycopg2-binary==2.9.12
 pydantic==2.13.5
 pydantic_core==2.46.5
-pypdf==6.19.0
+docling==2.69.1
 pytesseract==0.3.13
 python-dotenv==1.2.1
 python-multipart==0.0.20
@@ -53,5 +53,4 @@ urllib3==2.6.3
 uvicorn==0.39.0
 langchain-core==0.3.86
 langchain-openai==0.3.35
-langchain-text-splitters==0.3.11
 langsmith==0.4.37

@@ -1,19 +1,13 @@
 import hashlib
-import io
-import logging
 from typing import Optional
 
-import pypdf
-import pytesseract
-from PIL import Image
 from psycopg2.extras import Json
 
 from core.database import db_cursor
-from services.chunk_service import replace_chunks, split_text
+from services.chunk_service import embed_chunks, replace_chunks
+from services.chunker import chunk_document
 from services.display import format_metadata
 from services.tagging_service import generate_chunk_summaries, generate_chunk_tags, generate_document_metadata
-
-logger = logging.getLogger(__name__)
 
 # Upload origins, keyed by the name clients send; values are source.uuid rows from schema.sql
 SOURCE_IDS = {
@@ -30,18 +24,12 @@ TAG_STYLES = {
 }
 
 
-def extract_text(content: bytes, content_type: Optional[str]) -> str:
-    content_type = content_type or ""
-    try:
-        if content_type.startswith('image/'):
-            return pytesseract.image_to_string(Image.open(io.BytesIO(content)))
-        if content_type == 'application/pdf':
-            reader = pypdf.PdfReader(io.BytesIO(content))
-            return "\n".join(page.extract_text() or "" for page in reader.pages)
-        return content.decode('utf-8')
-    except Exception as e:
-        logger.warning("Text extraction failed for %s: %s", content_type, e)
-        return ""
+def get_upload_sources() -> list[dict]:
+    """Sources a client may upload to (chat is implicit), with label and accent color for the UI."""
+    return [
+        {"value": name, "label": TAG_STYLES[SOURCE_IDS[name]][0], "color": TAG_STYLES[SOURCE_IDS[name]][2]}
+        for name in ('library', 'tools')
+    ]
 
 
 def _is_unchanged(cur, file_name: str, file_hash: str, source_id: str, session_id: Optional[str]) -> bool:
@@ -56,27 +44,30 @@ def _is_unchanged(cur, file_name: str, file_hash: str, source_id: str, session_i
 
 def process_and_save_document(file_name: str, content: bytes, content_type: str, source_id: str, session_id: str = None) -> str:
     """Extract, chunk, embed and store a file. Returns a status message."""
-    text = extract_text(content, content_type).strip()
-    if not text:
-        return f"File {file_name} has no extractable text (not saved)"
-
     is_tool = source_id == SOURCE_IDS['tools']
     if is_tool:
         session_id = None  # tool documents are global
     file_hash = hashlib.sha256(content).hexdigest()
 
+    # Cheap duplicate check first, so a re-upload skips the slow extraction below
     with db_cursor() as cur:
         if _is_unchanged(cur, file_name, file_hash, source_id, session_id):
             return f"File {file_name} already exists (duplicate not saved)"
 
-    # Slow work (LLM tagging) happens before the write transaction opens
-    chunks = split_text(text)
+    chunks = chunk_document(content, content_type, file_name)
+    if not chunks:
+        return f"File {file_name} has no extractable text (not saved)"
+
+    # Slow work (LLM tagging, embedding) happens before the write transaction opens
+    texts = [c["text"] for c in chunks]
     if is_tool:
-        doc_metadata, chunk_tags = generate_document_metadata(text), generate_chunk_tags(chunks)
+        doc_metadata, chunk_tags = generate_document_metadata("\n\n".join(texts)), generate_chunk_tags(texts)
     else:
         doc_metadata, chunk_tags = None, [None] * len(chunks)
+    summaries = generate_chunk_summaries(texts)
     # Chunk i stores the summary of chunk i-1; the first chunk has none
-    previous_summaries = [None] + generate_chunk_summaries(chunks[:-1])
+    previous_summaries = [None] + summaries[:-1]
+    embeddings, embedded_from = embed_chunks(chunks, summaries)
 
     with db_cursor() as cur:
         cur.execute(
@@ -88,7 +79,7 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
                RETURNING id""",
             (file_name, file_hash, source_id, session_id, Json(doc_metadata) if doc_metadata else None),
         )
-        replace_chunks(cur, cur.fetchone()[0], chunks, chunk_tags, previous_summaries)
+        replace_chunks(cur, cur.fetchone()[0], chunks, embeddings, embedded_from, chunk_tags, previous_summaries)
 
     return f"File {file_name} uploaded successfully and saved to database"
 

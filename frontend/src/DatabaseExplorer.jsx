@@ -17,10 +17,18 @@ export default function DatabaseExplorer({ onClose }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  const libraryInputRef = useRef(null);
-  const toolsInputRef = useRef(null);
+  const [uploadSources, setUploadSources] = useState([]);
+  const uploadInputRef = useRef(null);
+  const uploadSourceRef = useRef(null);
 
   const query = search.trim();
+
+  useEffect(() => {
+    fetch(`${API_BASE}/upload-sources`)
+      .then(res => res.json())
+      .then(data => setUploadSources(data.sources || []))
+      .catch(err => console.error("Failed to fetch upload sources", err));
+  }, []);
 
   // Backend filters by name; debounce so typing doesn't fire a request per key
   useEffect(() => {
@@ -120,7 +128,8 @@ export default function DatabaseExplorer({ onClose }) {
     }
   };
 
-  const handleFileUpload = async (event, source) => {
+  const handleFileUpload = async (event) => {
+    const source = uploadSourceRef.current;
     const file = event.target.files[0];
     if (!file) return;
 
@@ -145,8 +154,7 @@ export default function DatabaseExplorer({ onClose }) {
       alert("Error uploading document.");
     } finally {
       setIsUploading(false);
-      if (libraryInputRef.current) libraryInputRef.current.value = "";
-      if (toolsInputRef.current) toolsInputRef.current.value = "";
+      if (uploadInputRef.current) uploadInputRef.current.value = "";
     }
   };
 
@@ -186,58 +194,35 @@ export default function DatabaseExplorer({ onClose }) {
             Library
           </h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <input 
-              type="file" 
-              ref={libraryInputRef} 
-              style={{ display: 'none' }} 
-              onChange={(e) => handleFileUpload(e, 'library')} 
+            <input
+              type="file"
+              ref={uploadInputRef}
+              style={{ display: 'none' }}
+              onChange={handleFileUpload}
             />
-            <input 
-              type="file" 
-              ref={toolsInputRef} 
-              style={{ display: 'none' }} 
-              onChange={(e) => handleFileUpload(e, 'tools')} 
-            />
-            <button 
-              onClick={() => libraryInputRef.current?.click()}
-              disabled={isUploading}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 12px',
-                backgroundColor: '#3b82f6',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: isUploading ? 'not-allowed' : 'pointer',
-                opacity: isUploading ? 0.7 : 1,
-                fontSize: '0.875rem'
-              }}
-            >
-              <Upload size={16} />
-              {isUploading ? 'Uploading...' : 'Upload Library File'}
-            </button>
-            <button 
-              onClick={() => toolsInputRef.current?.click()}
-              disabled={isUploading}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 12px',
-                backgroundColor: '#10b981',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: isUploading ? 'not-allowed' : 'pointer',
-                opacity: isUploading ? 0.7 : 1,
-                fontSize: '0.875rem'
-              }}
-            >
-              <Upload size={16} />
-              {isUploading ? 'Uploading...' : 'Upload Tool File'}
-            </button>
+            {uploadSources.map(src => (
+              <button
+                key={src.value}
+                onClick={() => { uploadSourceRef.current = src.value; uploadInputRef.current?.click(); }}
+                disabled={isUploading}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 12px',
+                  backgroundColor: src.color,
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: isUploading ? 'not-allowed' : 'pointer',
+                  opacity: isUploading ? 0.7 : 1,
+                  fontSize: '0.875rem'
+                }}
+              >
+                <Upload size={16} />
+                {isUploading ? 'Uploading...' : `Upload ${src.label} File`}
+              </button>
+            ))}
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '5px', marginLeft: '10px' }}>
               <X size={24} color="#64748b" />
             </button>

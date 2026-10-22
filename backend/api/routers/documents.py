@@ -17,6 +17,11 @@ async def upload_file(file: UploadFile = File(...), source: str = Form('library'
     return {"filename": file.filename, "status": "success", "message": upload_message}
 
 
+@router.get("/upload-sources")
+async def get_upload_sources():
+    return {"sources": document_service.get_upload_sources()}
+
+
 @router.get("/documents")
 async def get_all_documents(q: str = ""):
     return {"documents": await run_in_threadpool(document_service.get_all_documents, q)}
