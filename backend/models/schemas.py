@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 
 
 class ChatMessage(BaseModel):
@@ -8,8 +8,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    reply: str
-    session_id: Optional[str] = None
+    session_id: str
     # The user turn as stored by the backend plus the bot reply, ready to display
     messages: List[ChatMessage] = []
 

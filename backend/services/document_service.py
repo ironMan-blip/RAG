@@ -54,11 +54,11 @@ def _is_unchanged(cur, file_name: str, file_hash: str, source_id: str, session_i
     return cur.fetchone() is not None
 
 
-def process_and_save_document(file_name: str, content: bytes, content_type: str, source_id: str, session_id: str = None) -> tuple[str, str]:
-    """Extract, chunk, embed and store a file. Returns (status message, extracted text)."""
+def process_and_save_document(file_name: str, content: bytes, content_type: str, source_id: str, session_id: str = None) -> str:
+    """Extract, chunk, embed and store a file. Returns a status message."""
     text = extract_text(content, content_type).strip()
     if not text:
-        return f"File {file_name} has no extractable text (not saved)", ""
+        return f"File {file_name} has no extractable text (not saved)"
 
     is_tool = source_id == SOURCE_IDS['tools']
     if is_tool:
@@ -67,7 +67,7 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
 
     with db_cursor() as cur:
         if _is_unchanged(cur, file_name, file_hash, source_id, session_id):
-            return f"File {file_name} already exists (duplicate not saved)", text
+            return f"File {file_name} already exists (duplicate not saved)"
 
     # Slow work (LLM tagging) happens before the write transaction opens
     chunks = split_text(text)
@@ -88,7 +88,7 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
         )
         replace_chunks(cur, cur.fetchone()[0], chunks, chunk_tags)
 
-    return f"File {file_name} uploaded successfully and saved to database", text
+    return f"File {file_name} uploaded successfully and saved to database"
 
 
 def get_all_documents(search: str = ""):
@@ -96,7 +96,7 @@ def get_all_documents(search: str = ""):
     pattern = "%" + search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     with db_cursor() as cur:
         cur.execute("""
-            SELECT d.id, d.filename, d.file_hash, d.source_id, s.source_name, d.metadata
+            SELECT d.id, d.filename, d.source_id, s.source_name, d.metadata
             FROM documents d
             LEFT JOIN source s ON d.source_id = s.uuid
             WHERE d.filename ILIKE %s
@@ -104,14 +104,11 @@ def get_all_documents(search: str = ""):
         """, (pattern,))
         rows = cur.fetchall()
     docs = []
-    for doc_id, filename, file_hash, source_id, source_name, metadata in rows:
-        tag = source_name or "unknown"
-        label, bg_color, text_color = TAG_STYLES.get(source_id, (tag, '#f1f5f9', '#64748b'))
+    for doc_id, filename, source_id, source_name, metadata in rows:
+        label, bg_color, text_color = TAG_STYLES.get(source_id, (source_name or "unknown", '#f1f5f9', '#64748b'))
         docs.append({
             "id": doc_id,
             "filename": filename,
-            "file_hash": file_hash,
-            "tag": tag,
             "tag_label": label,
             "tag_bg_color": bg_color,
             "tag_text_color": text_color,

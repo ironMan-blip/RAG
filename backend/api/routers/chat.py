@@ -33,7 +33,6 @@ async def chat_endpoint(
 
     bot_reply = await run_in_threadpool(get_chat_completion, message, attached_filename, model, session_id)
     return ChatResponse(
-        reply=bot_reply,
         session_id=session_id,
         messages=[{"sender": "user", "text": message}, {"sender": "bot", "text": bot_reply}]
     )

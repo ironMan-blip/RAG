@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS chunks (
 );
 
 CREATE INDEX IF NOT EXISTS chunks_doc_id_idx ON chunks (doc_id);
+-- Approximate nearest-neighbour search for retrieval (<-> is L2 distance)
+CREATE INDEX IF NOT EXISTS chunks_embedding_idx ON chunks USING hnsw (chunk_embedding vector_l2_ops);
 
 CREATE TABLE IF NOT EXISTS chats (
     id VARCHAR(255) PRIMARY KEY,
@@ -48,3 +50,5 @@ CREATE TABLE IF NOT EXISTS chat_history (
     model TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS chat_history_session_idx ON chat_history (session_id, created_at);
