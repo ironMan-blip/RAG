@@ -36,8 +36,8 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
         with db_cursor() as cur:
             if attached_filename:
                 cur.execute("""
-                    SELECT sub.chunk_text, sub.filename FROM (
-                        SELECT c.chunk_text, d.filename, c.chunk_id
+                    SELECT sub.chunk_text, sub.filename, sub.previous_summary FROM (
+                        SELECT c.chunk_text, d.filename, c.chunk_id, c.previous_summary
                         FROM chunks c
                         JOIN documents d ON c.doc_id = d.id
                         WHERE d.filename = %s
@@ -48,7 +48,7 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
                 """, (attached_filename, query_embedding))
             else:
                 cur.execute("""
-                    SELECT c.chunk_text, d.filename
+                    SELECT c.chunk_text, d.filename, c.previous_summary
                     FROM chunks c
                     JOIN documents d ON c.doc_id = d.id
                     WHERE d.session_id IS NULL OR d.session_id = %s
@@ -61,7 +61,12 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
         return ""
     if not rows:
         return ""
-    excerpts = "".join(f"\n--- Excerpt {i} (from {filename}) ---\n{text}\n" for i, (text, filename) in enumerate(rows, 1))
+    excerpts = "".join(
+        f"\n--- Excerpt {i} (from {filename}) ---\n"
+        + (f"[Summary of preceding text: {summary}]\n" if summary else "")
+        + f"{text}\n"
+        for i, (text, filename, summary) in enumerate(rows, 1)
+    )
     return "Relevant excerpts from knowledge base:\n" + excerpts
 
 

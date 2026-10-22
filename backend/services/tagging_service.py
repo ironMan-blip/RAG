@@ -27,6 +27,10 @@ class ChunkTags(BaseModel):
     tags: list[str] = Field(description="Exactly 10 descriptive tags for the text", min_length=10, max_length=10)
 
 
+class ChunkSummary(BaseModel):
+    summary: str = Field(description="A concise 2-3 sentence summary of the text")
+
+
 _llm = ChatOpenAI(
     model=settings.LLM_MODEL2,
     api_key=settings.OPENROUTER_API_KEY,
@@ -47,6 +51,7 @@ def _chain(schema: type[BaseModel], instruction: str):
 
 _document_chain = _chain(DocumentMetadata, "Given the following document, generate its metadata.")
 _chunk_chain = _chain(ChunkTags, "Given the following text chunk, generate descriptive tags.")
+_summary_chain = _chain(ChunkSummary, "Given the following text chunk, summarize it.")
 
 
 def _run(chain, texts: list[str]) -> list[Optional[dict]]:
@@ -72,3 +77,9 @@ def generate_document_metadata(text: str) -> Optional[dict]:
 def generate_chunk_tags(texts: list[str]) -> list[Optional[list[str]]]:
     """Tags for each chunk; None where generation fails."""
     return [r["tags"] if r else None for r in _run(_chunk_chain, texts)]
+
+
+@traceable
+def generate_chunk_summaries(texts: list[str]) -> list[Optional[str]]:
+    """Summary of each chunk; None where generation fails."""
+    return [r["summary"] if r else None for r in _run(_summary_chain, texts)]

@@ -29,8 +29,12 @@ CREATE TABLE IF NOT EXISTS chunks (
     doc_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
     chunk_text TEXT NOT NULL,
     chunk_embedding vector(384),
-    metadata JSONB
+    metadata JSONB,
+    previous_summary TEXT
 );
+
+-- Summary of the preceding chunk (replaces chunk overlap); add on existing databases
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS previous_summary TEXT;
 
 CREATE INDEX IF NOT EXISTS chunks_doc_id_idx ON chunks (doc_id);
 -- Approximate nearest-neighbour search for retrieval (<-> is L2 distance)

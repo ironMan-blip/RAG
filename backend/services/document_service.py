@@ -11,7 +11,7 @@ from psycopg2.extras import Json
 from core.database import db_cursor
 from services.chunk_service import replace_chunks, split_text
 from services.display import format_metadata
-from services.tagging_service import generate_chunk_tags, generate_document_metadata
+from services.tagging_service import generate_chunk_summaries, generate_chunk_tags, generate_document_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +75,8 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
         doc_metadata, chunk_tags = generate_document_metadata(text), generate_chunk_tags(chunks)
     else:
         doc_metadata, chunk_tags = None, [None] * len(chunks)
+    # Chunk i stores the summary of chunk i-1; the first chunk has none
+    previous_summaries = [None] + generate_chunk_summaries(chunks[:-1])
 
     with db_cursor() as cur:
         cur.execute(
@@ -86,7 +88,7 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
                RETURNING id""",
             (file_name, file_hash, source_id, session_id, Json(doc_metadata) if doc_metadata else None),
         )
-        replace_chunks(cur, cur.fetchone()[0], chunks, chunk_tags)
+        replace_chunks(cur, cur.fetchone()[0], chunks, chunk_tags, previous_summaries)
 
     return f"File {file_name} uploaded successfully and saved to database"
 

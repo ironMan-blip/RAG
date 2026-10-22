@@ -8,7 +8,8 @@ from core.ml import embedder
 from services.display import format_metadata
 from services.tagging_service import generate_chunk_tags
 
-_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+# No overlap: each chunk carries a summary of the one before it instead
+_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
 
 
 def split_text(text: str) -> list[str]:
@@ -19,15 +20,16 @@ def _chunk_metadata(doc_id: int, tags: Optional[list[str]]) -> Optional[dict]:
     return {"document_id": doc_id, "tags": tags} if tags else None
 
 
-def replace_chunks(cur, doc_id: int, chunks: list[str], tags: list[Optional[list[str]]]):
+def replace_chunks(cur, doc_id: int, chunks: list[str], tags: list[Optional[list[str]]],
+                   previous_summaries: list[Optional[str]]):
     """Swap a document's chunks for new ones; runs in the caller's transaction."""
     embeddings = embedder.encode(chunks).tolist() if chunks else []
     cur.execute("DELETE FROM chunks WHERE doc_id = %s", (doc_id,))
     execute_values(
         cur,
-        "INSERT INTO chunks (doc_id, chunk_text, chunk_embedding, metadata) VALUES %s",
-        [(doc_id, c, e, Json(m) if (m := _chunk_metadata(doc_id, t)) else None)
-         for c, e, t in zip(chunks, embeddings, tags)],
+        "INSERT INTO chunks (doc_id, chunk_text, chunk_embedding, metadata, previous_summary) VALUES %s",
+        [(doc_id, c, e, Json(m) if (m := _chunk_metadata(doc_id, t)) else None, s)
+         for c, e, t, s in zip(chunks, embeddings, tags, previous_summaries)],
     )
 
 
