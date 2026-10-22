@@ -8,16 +8,23 @@ router = APIRouter()
 
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...), source: str = Form('library')):
-    source_id = document_service.SOURCE_IDS.get(source, source)
-    upload_message, extracted_text = await run_in_threadpool(
+    source_id = document_service.SOURCE_IDS.get(source)
+    if source_id is None:
+        raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
+    upload_message = await run_in_threadpool(
         document_service.process_and_save_document, file.filename, await file.read(), file.content_type, source_id
     )
-    return {"filename": file.filename, "status": "success", "message": upload_message, "extracted_text": extracted_text}
+    return {"filename": file.filename, "status": "success", "message": upload_message}
+
+
+@router.get("/upload-sources")
+async def get_upload_sources():
+    return {"sources": document_service.get_upload_sources()}
 
 
 @router.get("/documents")
-async def get_all_documents():
-    return {"documents": await run_in_threadpool(document_service.get_all_documents)}
+async def get_all_documents(q: str = ""):
+    return {"documents": await run_in_threadpool(document_service.get_all_documents, q)}
 
 
 @router.delete("/documents/{doc_id}")

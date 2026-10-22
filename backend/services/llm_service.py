@@ -1,15 +1,12 @@
 import logging
 import threading
 
-import httpx
 from langsmith import traceable, wrappers
 from openai import OpenAI
 
 from core.config import settings
-from core.database import db_cursor
-from core.ml import embedder
-from services.document_service import get_document_names
 from services.history_service import get_recent_chat_history, save_chat_history
+from services.retrieval_service import get_database_context, jev_decide_if_context_needed
 
 logger = logging.getLogger(__name__)
 
@@ -17,87 +14,13 @@ client = wrappers.wrap_openai(OpenAI(
     base_url=settings.OPENROUTER_BASE_URL,
     api_key=settings.OPENROUTER_API_KEY,
 ))
-_http = httpx.Client(timeout=10.0, headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}"})
 
-JEV_URL = "https://openrouter.ai/api/alpha/decisions"
 SYSTEM_PROMPT = "You are a very helpful AI assistant."
 CONTEXT_PROMPT = (
     "\n\nYou have been provided with relevant document excerpts below. You MUST use them to answer the user's query. "
     "Even if the user asks you to summarize a file they attached or mentioned, DO NOT say you cannot see it. "
     "Assume the context below is the file they are referring to.\n\nDOCUMENT CONTEXT:\n{context}\n"
 )
-
-
-@traceable
-def get_database_context(query: str, attached_filename: str = None, session_id: str = None) -> str:
-    """Nearest chunks to the query: from the attached file if any, else from all visible documents."""
-    query_embedding = str(embedder.encode(query).tolist())
-    try:
-        with db_cursor() as cur:
-            if attached_filename:
-                cur.execute("""
-                    SELECT sub.chunk_text, sub.filename FROM (
-                        SELECT c.chunk_text, d.filename, c.chunk_id
-                        FROM chunks c
-                        JOIN documents d ON c.doc_id = d.id
-                        WHERE d.filename = %s
-                        ORDER BY c.chunk_embedding <-> %s::vector
-                        LIMIT 3
-                    ) sub
-                    ORDER BY sub.chunk_id ASC
-                """, (attached_filename, query_embedding))
-            else:
-                cur.execute("""
-                    SELECT c.chunk_text, d.filename
-                    FROM chunks c
-                    JOIN documents d ON c.doc_id = d.id
-                    WHERE d.session_id IS NULL OR d.session_id = %s
-                    ORDER BY c.chunk_embedding <-> %s::vector
-                    LIMIT 5
-                """, (session_id, query_embedding))
-            rows = cur.fetchall()
-    except Exception:
-        logger.exception("Error fetching database context")
-        return ""
-    if not rows:
-        return ""
-    excerpts = "".join(f"\n--- Excerpt {i} (from {filename}) ---\n{text}\n" for i, (text, filename) in enumerate(rows, 1))
-    return "Relevant excerpts from knowledge base:\n" + excerpts
-
-
-@traceable
-def jev_decide_if_context_needed(message: str, history: list[tuple[str, str]], session_id: str = None) -> bool:
-    """Uses Jev to decide if external documents are needed for this query. Defaults to True on failure."""
-    try:
-        doc_names = get_document_names(session_id)
-        payload = {
-            "model": "typesafe/jev-1.13",
-            "state": {
-                "request": message,
-                "available_documents": "\n".join(f"{i}. {name}" for i, name in enumerate(doc_names, 1)) or "None",
-                "chat_history": "\n".join(f"User: {u}\nBot: {b}" for u, b in history) or "None",
-            },
-            "questions": {
-                "needs_context": {
-                    "type": "noul",
-                    "instructions": "Does `request` require looking up facts, data, or external documents? The following documents are available in the database: `available_documents`. Consider the recent chat context: `chat_history`.",
-                    "criteria": {
-                        "false": "casual greetings, conversational chat, or statements that require no context",
-                        "true": "factual queries or questions that need external documents"
-                    }
-                }
-            }
-        }
-        response = _http.post(JEV_URL, json=payload)
-        response.raise_for_status()
-        result = response.json()
-        if "error" in result:
-            logger.warning("Jev API returned an error payload: %s", result["error"])
-            return True
-        return result.get("answers", {}).get("needs_context", {}).get("noul", 0.0) > 0.5
-    except Exception:
-        logger.exception("Error calling jev")
-        return True
 
 
 def generate_chat_title(message: str) -> str:

@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from api.routers.chat import router as chat_router
+from api.routers.chats import router as chats_router
 from api.routers.documents import router as documents_router
 
 logging.basicConfig(level=logging.INFO)
@@ -32,4 +33,5 @@ app.add_middleware(
 )
 
 app.include_router(chat_router, prefix="/api", tags=["chat"])
+app.include_router(chats_router, prefix="/api", tags=["chats"])
 app.include_router(documents_router, prefix="/api", tags=["documents"])

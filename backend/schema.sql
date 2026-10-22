@@ -17,21 +17,23 @@ CREATE TABLE IF NOT EXISTS documents (
     filename VARCHAR(255) UNIQUE NOT NULL,
     file_hash VARCHAR(255),
     source_id VARCHAR(255) REFERENCES source(uuid),
-    session_id VARCHAR(255)
+    session_id VARCHAR(255),
+    metadata JSONB -- year, grade, subject, topic, subtopic
 );
-
--- Tags live on chunks only; drop the old per-document column on existing databases
-ALTER TABLE documents DROP COLUMN IF EXISTS metadata;
 
 CREATE TABLE IF NOT EXISTS chunks (
     chunk_id SERIAL PRIMARY KEY,
     doc_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
     chunk_text TEXT NOT NULL,
-    chunk_embedding vector(384),
-    metadata JSONB
+    -- Dimension must match core/ml.py's embedder
+    chunk_embedding vector(1024),
+    metadata JSONB,
+    previous_summary TEXT -- summary of the preceding chunk (replaces chunk overlap)
 );
 
 CREATE INDEX IF NOT EXISTS chunks_doc_id_idx ON chunks (doc_id);
+-- Approximate nearest-neighbour search for retrieval (<-> is L2 distance)
+CREATE INDEX IF NOT EXISTS chunks_embedding_idx ON chunks USING hnsw (chunk_embedding vector_l2_ops);
 
 CREATE TABLE IF NOT EXISTS chats (
     id VARCHAR(255) PRIMARY KEY,
@@ -47,3 +49,5 @@ CREATE TABLE IF NOT EXISTS chat_history (
     model TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS chat_history_session_idx ON chat_history (session_id, created_at);
