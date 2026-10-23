@@ -1,3 +1,4 @@
+import contextvars
 import logging
 import threading
 
@@ -59,6 +60,7 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
 
     if session_id:
         # Title generation is a second LLM call; keep it off the response path
-        threading.Thread(target=_save_turn, args=(session_id, message, bot_reply, used_model, not history), daemon=True).start()
+        # copy_context keeps the title call nested in this LangSmith trace
+        threading.Thread(target=contextvars.copy_context().run, args=(_save_turn, session_id,message, bot_reply, used_model, not history), daemon=True).start()
 
     return bot_reply

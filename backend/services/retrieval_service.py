@@ -95,6 +95,14 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
     return "Relevant excerpts from knowledge base:\n" + excerpts
 
 
+@traceable(run_type="llm", name="Jev")
+def _ask_jev(payload: dict) -> dict:
+    """Raw Jev request/response, so the trace shows the full prompt and answer."""
+    response = _http.post(JEV_URL, json=payload)
+    response.raise_for_status()
+    return response.json()
+
+
 @traceable
 def decide_if_context_needed(message: str, history: list[tuple[str, str]], session_id: str = None) -> bool:
     """Uses Jev to decide if external documents are needed for this query. Defaults to True on failure."""
@@ -118,9 +126,7 @@ def decide_if_context_needed(message: str, history: list[tuple[str, str]], sessi
                 }
             }
         }
-        response = _http.post(JEV_URL, json=payload)
-        response.raise_for_status()
-        result = response.json()
+        result = _ask_jev(payload)
         if "error" in result:
             logger.warning("Jev API returned an error payload: %s", result["error"])
             return True
