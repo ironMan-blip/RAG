@@ -35,9 +35,9 @@ The backend is built with FastAPI and runs on Python.
    ```
 4. Start the FastAPI server using Uvicorn:
    ```bash
-   uvicorn main:app --reload
+   uvicorn main:app --reload --port 8001
    ```
-   *The backend will typically be accessible at `http://localhost:8000`. You can view the API documentation at `http://localhost:8000/docs`.*
+   *The backend will typically be accessible at `http://localhost:8001`. You can view the API documentation at `http://localhost:8001/docs`.*
 
 ## 3. Running the Frontend
 
