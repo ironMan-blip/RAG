@@ -25,17 +25,17 @@ CONTEXT_PROMPT = (
 )
 
 
-def _save_turn(session_id: str, message: str, bot_reply: str, model: str, is_new_chat: bool):
+def _save_turn(session_id: str, message: str, bot_reply: str, model: str, prompt: str, is_new_chat: bool):
     try:
         title = generate_chat_title(message) if is_new_chat else None
-        save_chat_history(session_id, message, bot_reply, model, title)
+        save_chat_history(session_id, message, bot_reply, model, prompt, title)
     except Exception:
         logger.exception("Error saving chat history")
 
 
 @traceable
-def get_chat_completion(message: str, attached_filename: str = None, model: str = None, session_id: str = None) -> str:
-    """Sends a message to the AI and retrieves the reply, including database context."""
+def get_chat_completion(message: str, attached_filename: str = None, model: str = None, session_id: str = None) -> tuple[str, str]:
+    """Sends a message to the AI; returns (reply, the full prompt it received)."""
     history = get_recent_chat_history(session_id, limit=5)
 
     system_prompt = SYSTEM_PROMPT
@@ -49,18 +49,17 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
         system_prompt += f"\n\n <chat_history>\n PREVIOUS CHAT HISTORY (Last 5 messages):\n{turns}\n </chat_history>\n"
 
     used_model = model or settings.LLM_MODEL1
-    response = client.chat.completions.create(
-        model=used_model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": message}
-        ],
-    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": message}
+    ]
+    response = client.chat.completions.create(model=used_model, messages=messages)
     bot_reply = response.choices[0].message.content
+    prompt = "\n\n".join(f"[{m['role'].upper()}]\n{m['content']}" for m in messages)
 
     if session_id:
         # Title generation is a second LLM call; keep it off the response path
         # copy_context keeps the title call nested in this LangSmith trace
-        threading.Thread(target=contextvars.copy_context().run, args=(_save_turn, session_id,message, bot_reply, used_model, not history), daemon=True).start()
+        threading.Thread(target=contextvars.copy_context().run, args=(_save_turn, session_id, message, bot_reply, used_model, prompt, not history), daemon=True).start()
 
-    return bot_reply
+    return bot_reply, prompt

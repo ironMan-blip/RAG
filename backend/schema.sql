@@ -47,7 +47,11 @@ CREATE TABLE IF NOT EXISTS chat_history (
     user_message TEXT NOT NULL,
     bot_reply TEXT NOT NULL,
     model TEXT,
+    prompt TEXT, -- full prompt (system + user) sent to the LLM for this turn
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Existing databases created before the prompt column
+ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS prompt TEXT;
 
 CREATE INDEX IF NOT EXISTS chat_history_session_idx ON chat_history (session_id, created_at);
