@@ -10,6 +10,9 @@ class Settings:
     LLM_MODEL1: str = os.getenv("LLM_MODEL1", "")
     LLM_MODEL2: str = os.getenv("LLM_MODEL2", "")
     LLM_MODEL3: str = os.getenv("LLM_MODEL3", "")
+    # Tags and summaries run on a local OpenAI-compatible server (Ollama) so bulk uploads cost nothing
+    TAGGING_BASE_URL: str = os.getenv("TAGGING_BASE_URL", "http://localhost:11434/v1")
+    TAGGING_MODEL: str = os.getenv("TAGGING_MODEL", "qwen3:4b")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
     @property

@@ -32,10 +32,11 @@ class ChunkSummary(BaseModel):
 
 
 _llm = ChatOpenAI(
-    model=settings.LLM_MODEL2,
-    api_key=settings.OPENROUTER_API_KEY,
-    base_url=settings.OPENROUTER_BASE_URL,
+    model=settings.TAGGING_MODEL,
+    api_key="ollama",  # Ollama ignores the key but the client requires one
+    base_url=settings.TAGGING_BASE_URL,
     temperature=0.0,
+    reasoning_effort="none",  # Qwen3 thinking adds latency and nothing to tags
 )
 
 
@@ -46,7 +47,10 @@ def _chain(schema: type[BaseModel], instruction: str):
         input_variables=["text"],
         partial_variables={"format_instructions": parser.get_format_instructions()},
     )
-    return prompt | _llm | parser
+    # Constrained decoding: small local models otherwise echo the schema back instead of filling it
+    llm = _llm.bind(response_format={"type": "json_schema",
+                                     "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()}})
+    return prompt | llm | parser
 
 
 _document_chain = _chain(DocumentMetadata, "Given the following document, generate its metadata.")
@@ -58,7 +62,7 @@ def _run(chain, texts: list[str]) -> list[Optional[dict]]:
     """Run a chain over each text concurrently; None where generation fails."""
     results = chain.batch(
         [{"text": t} for t in texts],
-        config={"max_concurrency": 8},
+        config={"max_concurrency": 2},  # local Ollama queues beyond this; more only costs RAM
         return_exceptions=True,
     )
     for r in results:
