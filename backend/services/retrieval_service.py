@@ -1,14 +1,20 @@
 import json
 import logging
 
+import httpx
 from langsmith import traceable
 
+from core.config import settings
 from core.database import db_cursor
 from core.ml import embedder
 from services.document_service import get_document_names
-from services.tagging_service import decide_needs_context, generate_query_profile
+from services.tagging_service import generate_query_profile
 
 logger = logging.getLogger(__name__)
+
+_http = httpx.Client(timeout=10.0, headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}"})
+
+JEV_URL = "https://openrouter.ai/api/alpha/decisions"
 
 _PROFILE_FIELDS = ("year", "grade", "subject", "topic", "subtopic")
 
@@ -91,12 +97,34 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
 
 @traceable
 def decide_if_context_needed(message: str, history: list[tuple[str, str]], session_id: str = None) -> bool:
-    """Asks the local model whether the documents are needed for this query. Defaults to True on failure."""
+    """Uses Jev to decide if external documents are needed for this query. Defaults to True on failure."""
     try:
         doc_names = get_document_names(session_id)
+        payload = {
+            "model": "typesafe/jev-1.13",
+            "state": {
+                "request": message,
+                "available_documents": "\n".join(f"{i}. {name}" for i, name in enumerate(doc_names, 1)) or "None",
+                "chat_history": "\n".join(f"User: {u}\nBot: {b}" for u, b in history) or "None",
+            },
+            "questions": {
+                "needs_context": {
+                    "type": "noul",
+                    "instructions": "Does `request` require looking up facts, data, or external documents? The following documents are available in the database: `available_documents`. Consider the recent chat context: `chat_history`.",
+                    "criteria": {
+                        "false": "casual greetings, conversational chat, or statements that require no context",
+                        "true": "factual queries or questions that need external documents"
+                    }
+                }
+            }
+        }
+        response = _http.post(JEV_URL, json=payload)
+        response.raise_for_status()
+        result = response.json()
+        if "error" in result:
+            logger.warning("Jev API returned an error payload: %s", result["error"])
+            return True
+        return result.get("answers", {}).get("needs_context", {}).get("noul", 0.0) > 0.5
     except Exception:
-        logger.exception("Error listing documents")
+        logger.exception("Error calling jev")
         return True
-    documents = "\n".join(f"{i}. {name}" for i, name in enumerate(doc_names, 1)) or "None"
-    chat = "\n".join(f"User: {u}\nBot: {b}" for u, b in history) or "None"
-    return decide_needs_context(f"Request: {message}\n\nAvailable documents:\n{documents}\n\nRecent chat:\n{chat}")

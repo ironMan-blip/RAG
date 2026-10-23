@@ -41,11 +41,6 @@ class QueryProfile(BaseModel):
     keywords: list[str] = Field(description="Exactly 10 search keywords for the question", min_length=10, max_length=10)
 
 
-class ContextDecision(BaseModel):
-    needs_context: bool = Field(description="true for factual questions that need the documents; false for greetings, "
-                                            "casual chat, or statements that need no context")
-
-
 class ChatTitle(BaseModel):
     title: str = Field(description="A 3-5 word title for the chat, no quotes")
 
@@ -76,8 +71,6 @@ _document_chain = _chain(DocumentMetadata, "Given the following document, genera
 _chunk_chain = _chain(ChunkTags, "Given the following text chunk, generate descriptive tags.")
 _summary_chain = _chain(ChunkSummary, "Given the following text chunk, summarize it.")
 _query_chain = _chain(QueryProfile, "Given the following user question, guess its metadata and search keywords.")
-_context_chain = _chain(ContextDecision, "Given the following request, the documents available in the database and "
-                                         "the recent chat, decide whether answering needs facts from the documents.")
 _title_chain = _chain(ChatTitle, "Given the following first message of a chat, write a short title for the chat.")
 
 
@@ -116,13 +109,6 @@ def generate_chunk_summaries(texts: list[str]) -> list[Optional[str]]:
 def generate_query_profile(text: str) -> dict:
     """Guessed year, grade, subject, topic, subtopic and 10 keywords for a question; {} on failure."""
     return _run(_query_chain, [text])[0] or {}
-
-
-@traceable
-def decide_needs_context(text: str) -> bool:
-    """Whether the request needs document context; True on failure so answers never lose context."""
-    r = _run(_context_chain, [text])[0]
-    return r["needs_context"] if r else True
 
 
 @traceable

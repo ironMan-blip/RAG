@@ -5,12 +5,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Settings:
-    # Every LLM call goes to a local OpenAI-compatible server (Ollama), so nothing depends on a cloud provider
+    # Only for Jev, the context decision model; it answers faster than a local LLM
+    OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
+    # Every other LLM call goes to a local OpenAI-compatible server (Ollama)
     LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "http://localhost:11434/v1")
     LLM_MODEL1: str = os.getenv("LLM_MODEL1", "llama3.1:latest")
     LLM_MODEL2: str = os.getenv("LLM_MODEL2", "")
     LLM_MODEL3: str = os.getenv("LLM_MODEL3", "")
-    # Small model for tags, summaries, query profiles, routing and titles
+    # Small model for tags, summaries, query profiles and titles
     TAGGING_MODEL: str = os.getenv("TAGGING_MODEL", "qwen3:4b")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
