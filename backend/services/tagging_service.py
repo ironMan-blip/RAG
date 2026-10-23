@@ -31,10 +31,29 @@ class ChunkSummary(BaseModel):
     summary: str = Field(description="A concise 2-3 sentence summary of the text")
 
 
+# Field names match DocumentMetadata so retrieval compares them key by key
+class QueryProfile(BaseModel):
+    year: str = Field(description="The year mentioned or implied by the question, or empty string if none")
+    grade: str = Field(description="The grade level implied by the question, or empty string if none")
+    subject: str = Field(description="The subject of the question, or empty string if unclear")
+    topic: str = Field(description="The topic of the question, or empty string if unclear")
+    subtopic: str = Field(description="The subtopic of the question, or empty string if unclear")
+    keywords: list[str] = Field(description="Exactly 10 search keywords for the question", min_length=10, max_length=10)
+
+
+class ContextDecision(BaseModel):
+    needs_context: bool = Field(description="true for factual questions that need the documents; false for greetings, "
+                                            "casual chat, or statements that need no context")
+
+
+class ChatTitle(BaseModel):
+    title: str = Field(description="A 3-5 word title for the chat, no quotes")
+
+
 _llm = ChatOpenAI(
     model=settings.TAGGING_MODEL,
     api_key="ollama",  # Ollama ignores the key but the client requires one
-    base_url=settings.TAGGING_BASE_URL,
+    base_url=settings.LLM_BASE_URL,
     temperature=0.0,
     reasoning_effort="none",  # Qwen3 thinking adds latency and nothing to tags
 )
@@ -56,6 +75,10 @@ def _chain(schema: type[BaseModel], instruction: str):
 _document_chain = _chain(DocumentMetadata, "Given the following document, generate its metadata.")
 _chunk_chain = _chain(ChunkTags, "Given the following text chunk, generate descriptive tags.")
 _summary_chain = _chain(ChunkSummary, "Given the following text chunk, summarize it.")
+_query_chain = _chain(QueryProfile, "Given the following user question, guess its metadata and search keywords.")
+_context_chain = _chain(ContextDecision, "Given the following request, the documents available in the database and "
+                                         "the recent chat, decide whether answering needs facts from the documents.")
+_title_chain = _chain(ChatTitle, "Given the following first message of a chat, write a short title for the chat.")
 
 
 def _run(chain, texts: list[str]) -> list[Optional[dict]]:
@@ -87,3 +110,23 @@ def generate_chunk_tags(texts: list[str]) -> list[Optional[list[str]]]:
 def generate_chunk_summaries(texts: list[str]) -> list[Optional[str]]:
     """Summary of each chunk; None where generation fails."""
     return [r["summary"] if r else None for r in _run(_summary_chain, texts)]
+
+
+@traceable
+def generate_query_profile(text: str) -> dict:
+    """Guessed year, grade, subject, topic, subtopic and 10 keywords for a question; {} on failure."""
+    return _run(_query_chain, [text])[0] or {}
+
+
+@traceable
+def decide_needs_context(text: str) -> bool:
+    """Whether the request needs document context; True on failure so answers never lose context."""
+    r = _run(_context_chain, [text])[0]
+    return r["needs_context"] if r else True
+
+
+@traceable
+def generate_chat_title(text: str) -> str:
+    """Short chat title for a first message; the message's first 30 characters on failure."""
+    r = _run(_title_chain, [text])[0]
+    return r["title"].strip().strip('"') if r else (text[:30] + "..." if len(text) > 30 else text)

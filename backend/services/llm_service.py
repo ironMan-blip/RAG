@@ -6,13 +6,14 @@ from openai import OpenAI
 
 from core.config import settings
 from services.history_service import get_recent_chat_history, save_chat_history
-from services.retrieval_service import get_database_context, jev_decide_if_context_needed
+from services.retrieval_service import decide_if_context_needed, get_database_context
+from services.tagging_service import generate_chat_title
 
 logger = logging.getLogger(__name__)
 
 client = wrappers.wrap_openai(OpenAI(
-    base_url=settings.OPENROUTER_BASE_URL,
-    api_key=settings.OPENROUTER_API_KEY,
+    base_url=settings.LLM_BASE_URL,
+    api_key="ollama",  # Ollama ignores the key but the client requires one
 ))
 
 SYSTEM_PROMPT = "You are a very helpful AI assistant."
@@ -21,17 +22,6 @@ CONTEXT_PROMPT = (
     "Even if the user asks you to summarize a file they attached or mentioned, DO NOT say you cannot see it. "
     "Assume the context below is the file they are referring to.\n\nDOCUMENT CONTEXT:\n{context}\n"
 )
-
-
-def generate_chat_title(message: str) -> str:
-    try:
-        response = client.chat.completions.create(
-            model=settings.LLM_MODEL1,
-            messages=[{"role": "user", "content": f"Summarize this prompt in 3-5 words for a chat title. Output only the title, no quotes or other text:\n{message}"}],
-        )
-        return response.choices[0].message.content.strip().strip('"')
-    except Exception:
-        return message[:30] + "..." if len(message) > 30 else message
 
 
 def _save_turn(session_id: str, message: str, bot_reply: str, model: str, is_new_chat: bool):
@@ -48,7 +38,7 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
     history = get_recent_chat_history(session_id, limit=5)
 
     system_prompt = SYSTEM_PROMPT
-    if attached_filename or jev_decide_if_context_needed(message, history[-3:], session_id):
+    if attached_filename or decide_if_context_needed(message, history[-3:], session_id):
         db_context = get_database_context(message, attached_filename, session_id)
         if db_context:
             system_prompt += CONTEXT_PROMPT.format(context=db_context)
@@ -64,7 +54,6 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": message}
         ],
-        extra_body={"reasoning": {"enabled": True}}
     )
 
     if not response.choices:

@@ -9,7 +9,6 @@ from docling_core.types.doc import BoundingBox, DoclingDocument, ProvenanceItem,
 from core.ml import embedder
 from services.chunk_service import embed_chunks
 from services.chunker import chunk_docling, chunk_plain_text
-from services.retrieval_service import _excerpt_runs
 
 _html = DocumentConverter(allowed_formats=[InputFormat.HTML])
 
@@ -106,15 +105,6 @@ class Embedding(unittest.TestCase):
             embedder.max_seq_length = limit
         self.assertEqual(sources, ["summary", "text"])
         self.assertEqual(len(embeddings[0]), embedder.get_sentence_embedding_dimension())
-
-
-class Retrieval(unittest.TestCase):
-    def test_adjacent_chunks_join_into_one_excerpt(self):
-        # (doc_id, pos, text, previous_summary, filename, rank)
-        rows = [(2, 5, "b5", None, "b.pdf", 1), (1, 2, "a2", "s1", "a.pdf", 2),
-                (1, 3, "a3", "s2", "a.pdf", 2), (1, 7, "a7", "s6", "a.pdf", 3)]
-        self.assertEqual(_excerpt_runs(rows),
-                         [("b.pdf", None, ["b5"]), ("a.pdf", "s1", ["a2", "a3"]), ("a.pdf", "s6", ["a7"])])
 
 
 if __name__ == "__main__":

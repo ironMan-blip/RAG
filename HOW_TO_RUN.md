@@ -7,6 +7,7 @@ This document outlines the steps to run both the backend and frontend of the RAG
 - **Python 3.9+**
 - **Node.js & npm**
 - **PostgreSQL** running locally
+- **Ollama** running locally with the models in `backend/.env` pulled: `ollama pull llama3.1 && ollama pull qwen3:4b`
 
 ### 1. Database Setup
 Ensure you have a local PostgreSQL instance running. You need to create a database named `rag`.
