@@ -2,7 +2,8 @@
 .env
 .venv
 env/
-venv/
+venv
+venv.nosync/
 ENV/
 env.bak/
 venv.bak/
