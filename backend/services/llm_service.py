@@ -55,12 +55,6 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
             {"role": "user", "content": message}
         ],
     )
-
-    if not response.choices:
-        error_info = getattr(response, "error", "Unknown AI Provider Error")
-        error_msg = error_info.get("message", str(error_info)) if isinstance(error_info, dict) else str(error_info)
-        return f"⚠️ **AI Provider Error**: {error_msg}"
-
     bot_reply = response.choices[0].message.content
 
     if session_id:
