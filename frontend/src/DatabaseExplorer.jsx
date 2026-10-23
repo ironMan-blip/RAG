@@ -65,27 +65,52 @@ export default function DatabaseExplorer({ onClose }) {
     }
   };
 
-  const regenerateTags = async (docId, chunkId) => {
-    setRegeneratingChunkIds(prev => new Set(prev).add(chunkId));
+  // kind: 'tags' or 'previous-summary'; the response field replaces the same field on the chunk
+  const regenerate = async (docId, chunkId, kind, field) => {
+    const key = `${chunkId}:${kind}`;
+    setRegeneratingChunkIds(prev => new Set(prev).add(key));
     try {
-      const res = await fetch(`${API_BASE}/chunks/${chunkId}/tags`, { method: 'POST' });
+      const res = await fetch(`${API_BASE}/chunks/${chunkId}/${kind}`, { method: 'POST' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const { metadata_text } = await res.json();
+      const data = await res.json();
       setChunksByDoc(prev => Array.isArray(prev[docId]) ? {
         ...prev,
-        [docId]: prev[docId].map(c => c.chunk_id === chunkId ? { ...c, metadata_text } : c)
+        [docId]: prev[docId].map(c => c.chunk_id === chunkId ? { ...c, [field]: data[field] } : c)
       } : prev);
     } catch (error) {
-      console.error("Failed to regenerate tags", error);
-      alert("Failed to regenerate tags.");
+      console.error(`Failed to regenerate ${kind}`, error);
+      alert(`Failed to regenerate ${kind.replace('-', ' ')}.`);
     } finally {
       setRegeneratingChunkIds(prev => {
         const next = new Set(prev);
-        next.delete(chunkId);
+        next.delete(key);
         return next;
       });
     }
   };
+
+  const regenerateButton = (isRegenerating, onClick, label) => (
+    <button
+      onClick={onClick}
+      disabled={isRegenerating}
+      title={label}
+      aria-label={label}
+      style={{
+        position: 'absolute',
+        top: '6px',
+        right: '6px',
+        display: 'flex',
+        padding: '5px',
+        background: '#fff',
+        border: '1px solid #cbd5e1',
+        borderRadius: '6px',
+        cursor: isRegenerating ? 'not-allowed' : 'pointer',
+        opacity: isRegenerating ? 0.6 : 1
+      }}
+    >
+      <RefreshCw size={14} color="#475569" style={isRegenerating ? { animation: 'spin 1s linear infinite' } : undefined} />
+    </button>
+  );
 
   const toggleDocument = (docId) => {
     setExpandedChunkId(null);
@@ -343,9 +368,10 @@ export default function DatabaseExplorer({ onClose }) {
                           <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>This document has no chunks.</p>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            {chunks.map(chunk => {
+                            {chunks.map((chunk, index) => {
                               const isChunkExpanded = expandedChunkId === chunk.chunk_id;
-                              const isRegenerating = regeneratingChunkIds.has(chunk.chunk_id);
+                              const isRegeneratingTags = regeneratingChunkIds.has(`${chunk.chunk_id}:tags`);
+                              const isRegeneratingSummary = regeneratingChunkIds.has(`${chunk.chunk_id}:previous-summary`);
                               return (
                                 <div key={chunk.chunk_id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', backgroundColor: '#fff', overflow: 'hidden' }}>
                                   <button
@@ -372,33 +398,18 @@ export default function DatabaseExplorer({ onClose }) {
                                   </button>
                                   {isChunkExpanded && (
                                     <div style={{ position: 'relative', borderTop: '1px solid #e2e8f0' }}>
-                                      <button
-                                        onClick={() => regenerateTags(doc.id, chunk.chunk_id)}
-                                        disabled={isRegenerating}
-                                        title="Regenerate tags"
-                                        aria-label="Regenerate tags"
-                                        style={{
-                                          position: 'absolute',
-                                          top: '6px',
-                                          right: '6px',
-                                          display: 'flex',
-                                          padding: '5px',
-                                          background: '#fff',
-                                          border: '1px solid #cbd5e1',
-                                          borderRadius: '6px',
-                                          cursor: isRegenerating ? 'not-allowed' : 'pointer',
-                                          opacity: isRegenerating ? 0.6 : 1
-                                        }}
-                                      >
-                                        <RefreshCw size={14} color="#475569" style={isRegenerating ? { animation: 'spin 1s linear infinite' } : undefined} />
-                                      </button>
+                                      {regenerateButton(isRegeneratingTags, () => regenerate(doc.id, chunk.chunk_id, 'tags', 'metadata_text'), 'Regenerate tags')}
                                       <pre style={{ margin: 0, fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: '#f1f5f9', padding: '10px 40px 10px 10px' }}>
                                         {chunk.metadata_text}
                                       </pre>
-                                      {chunk.previous_summary && (
-                                        <pre style={{ margin: 0, fontSize: '0.8rem', color: '#475569', whiteSpace: 'pre-wrap', backgroundColor: '#fef9c3', padding: '10px', borderTop: '1px solid #e2e8f0' }}>
-                                          {'Summary of previous chunk:\n' + chunk.previous_summary}
-                                        </pre>
+                                      {/* The first chunk has no previous chunk to summarize */}
+                                      {index > 0 && (
+                                        <div style={{ position: 'relative', borderTop: '1px solid #e2e8f0' }}>
+                                          {regenerateButton(isRegeneratingSummary, () => regenerate(doc.id, chunk.chunk_id, 'previous-summary', 'previous_summary'), 'Regenerate summary')}
+                                          <pre style={{ margin: 0, fontSize: '0.8rem', color: '#475569', whiteSpace: 'pre-wrap', backgroundColor: '#fef9c3', padding: '10px 40px 10px 10px' }}>
+                                            {'Summary of previous chunk:\n' + (chunk.previous_summary || 'No summary available.')}
+                                          </pre>
+                                        </div>
                                       )}
                                       <pre style={{ margin: 0, fontSize: '0.8rem', color: '#1e293b', whiteSpace: 'pre-wrap', padding: '10px', borderTop: '1px solid #e2e8f0', maxHeight: '400px', overflowY: 'auto' }}>
                                         {chunk.chunk_text}

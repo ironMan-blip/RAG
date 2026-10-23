@@ -43,8 +43,19 @@ async def get_document_chunks(doc_id: int):
 async def regenerate_chunk_tags(chunk_id: int):
     try:
         metadata_text = await run_in_threadpool(chunk_service.regenerate_chunk_metadata, chunk_id)
-    except chunk_service.TaggingFailed:
+    except chunk_service.GenerationFailed:
         raise HTTPException(status_code=502, detail="Tag generation failed")
     if metadata_text is None:
         raise HTTPException(status_code=404, detail="Chunk not found")
     return {"chunk_id": chunk_id, "metadata_text": metadata_text}
+
+
+@router.post("/chunks/{chunk_id}/previous-summary")
+async def regenerate_previous_summary(chunk_id: int):
+    try:
+        previous_summary = await run_in_threadpool(chunk_service.regenerate_previous_summary, chunk_id)
+    except chunk_service.GenerationFailed:
+        raise HTTPException(status_code=502, detail="Summary generation failed")
+    if previous_summary is None:
+        raise HTTPException(status_code=404, detail="Chunk not found or has no previous chunk")
+    return {"chunk_id": chunk_id, "previous_summary": previous_summary}
