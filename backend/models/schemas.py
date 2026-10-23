@@ -1,9 +1,12 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
 class ChatMessage(BaseModel):
     sender: str
     text: str
+    prompt: Optional[str] = None  # bot turns only: the full prompt the LLM received
 
 
 class ChatResponse(BaseModel):

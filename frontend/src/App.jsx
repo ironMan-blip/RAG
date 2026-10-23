@@ -16,6 +16,7 @@ function App() {
   const [chatId, setChatId] = useState(null);
   const [chatSessions, setChatSessions] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [openPromptIdx, setOpenPromptIdx] = useState(null);
 
   const modelDropdownRef = useRef(null);
 
@@ -40,6 +41,7 @@ function App() {
       .then(data => {
         setChatId(data.session_id);
         setMessages(data.history);
+        setOpenPromptIdx(null);
       })
       .catch(err => console.error("Failed to start chat:", err));
   };
@@ -95,6 +97,7 @@ function App() {
         if (data.history) {
           setChatId(id);
           setMessages(data.history);
+          setOpenPromptIdx(null);
           setIsSidebarOpen(false);
         }
       })
@@ -266,8 +269,13 @@ function App() {
                   <Bot size={18} />
                 </div>
               )}
-              <div className={`message ${msg.sender}-message`}>
+              <div
+                className={`message ${msg.sender}-message ${msg.prompt ? 'has-prompt' : ''}`}
+                onClick={msg.prompt ? () => setOpenPromptIdx(openPromptIdx === idx ? null : idx) : undefined}
+                title={msg.prompt ? 'Click to show the prompt the AI received' : undefined}
+              >
                 {msg.text}
+                {openPromptIdx === idx && <pre className="prompt-view" onClick={e => e.stopPropagation()}>{msg.prompt}</pre>}
               </div>
               {msg.sender === 'user' && (
                 <div className="avatar user-avatar">

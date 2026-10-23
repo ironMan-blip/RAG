@@ -30,10 +30,10 @@ async def chat_endpoint(
         header = f"[Attached File: {file.filename}]"
         message = f"{header}\n\n{message}" if message.strip() else header
 
-    bot_reply = await run_in_threadpool(get_chat_completion, message, attached_filename, model, session_id)
+    bot_reply, prompt = await run_in_threadpool(get_chat_completion, message, attached_filename, model, session_id)
     return ChatResponse(
         session_id=session_id,
-        messages=[{"sender": "user", "text": message}, {"sender": "bot", "text": bot_reply}]
+        messages=[{"sender": "user", "text": message}, {"sender": "bot", "text": bot_reply, "prompt": prompt}]
     )
 
 

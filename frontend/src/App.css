@@ -201,6 +201,21 @@ body {
   border-top-left-radius: 4px;
 }
 
+.has-prompt {
+  cursor: pointer;
+}
+
+.prompt-view {
+  margin: 12px 0 0;
+  padding: 12px;
+  max-height: 400px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 0.8rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  cursor: text;
+}
+
 .user-message {
   background-color: var(--user-msg-bg);
   color: var(--user-msg-text);

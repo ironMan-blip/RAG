@@ -20,9 +20,21 @@ _PROFILE_FIELDS = ("year", "grade", "subject", "topic", "subtopic")
 
 # Phase 1: top 10 documents by how many profile fields match their metadata (case-insensitive substring
 #          either way, so "8" matches "Grade 8"); if none match, every document in scope.
-# Phase 2: top 20 of their chunks by how many query keywords hit a chunk tag; ties go to the closer chunk.
-# Phase 3: the 5 of those nearest to the query embedding.
-# shortcut: the fallback scores tags on every visible chunk, add a cap if the corpus grows large.
+# Phase 2 (disabled for now): top 20 of their chunks by how many query keywords hit a chunk tag;
+#          ties go to the closer chunk.
+# Phase 3: the 5 chunks of those documents nearest to the query embedding.
+# Phase 2 CTE, kept out of the SQL string because psycopg2 fills placeholders even inside SQL comments:
+#   top_chunks AS (
+#       SELECT c.chunk_id, c.chunk_embedding <-> %(query)s::vector AS distance
+#       FROM chunks c
+#       WHERE c.doc_id IN (SELECT id FROM top_docs)
+#       ORDER BY
+#           (SELECT count(*) FROM unnest(%(keywords)s::text[]) kw
+#            WHERE EXISTS (SELECT 1 FROM jsonb_array_elements_text(c.metadata->'tags') t
+#                          WHERE t ILIKE '%%' || kw || '%%')) DESC,
+#           distance
+#       LIMIT 20
+#   )
 _CONTEXT_SQL = """
     WITH scored AS (
         SELECT d.id FROM documents d,
@@ -40,30 +52,19 @@ _CONTEXT_SQL = """
         SELECT id FROM scored
         UNION ALL
         SELECT d.id FROM documents d WHERE ({scope}) AND NOT EXISTS (SELECT 1 FROM scored)
-    ),
-    top_chunks AS (
-        SELECT c.chunk_id, c.chunk_embedding <-> %(query)s::vector AS distance
-        FROM chunks c
-        WHERE c.doc_id IN (SELECT id FROM top_docs)
-        ORDER BY
-            (SELECT count(*) FROM unnest(%(keywords)s::text[]) kw
-             WHERE EXISTS (SELECT 1 FROM jsonb_array_elements_text(c.metadata->'tags') t
-                           WHERE t ILIKE '%%' || kw || '%%')) DESC,
-            distance
-        LIMIT 20
     )
     SELECT d.filename, c.chunk_text, c.previous_summary
-    FROM top_chunks tc
-    JOIN chunks c USING (chunk_id)
+    FROM chunks c
     JOIN documents d ON d.id = c.doc_id
-    ORDER BY tc.distance
+    WHERE c.doc_id IN (SELECT id FROM top_docs)
+    ORDER BY c.chunk_embedding <-> %(query)s::vector
     LIMIT 5
 """
 
 
 @traceable
 def get_database_context(query: str, attached_filename: str = None, session_id: str = None) -> str:
-    """5 chunks for the query, narrowed by document metadata, then chunk tags, then vector distance."""
+    """5 chunks for the query, narrowed by document metadata, then vector distance."""
     profile = generate_query_profile(query)
     # An attached file is already the chosen document, so its metadata is not scored
     metadata = {} if attached_filename else {
