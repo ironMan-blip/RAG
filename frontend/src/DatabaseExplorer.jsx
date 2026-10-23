@@ -368,7 +368,7 @@ export default function DatabaseExplorer({ onClose }) {
                           <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>This document has no chunks.</p>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            {chunks.map((chunk, index) => {
+                            {chunks.map(chunk => {
                               const isChunkExpanded = expandedChunkId === chunk.chunk_id;
                               const isRegeneratingTags = regeneratingChunkIds.has(`${chunk.chunk_id}:tags`);
                               const isRegeneratingSummary = regeneratingChunkIds.has(`${chunk.chunk_id}:previous-summary`);
@@ -402,12 +402,11 @@ export default function DatabaseExplorer({ onClose }) {
                                       <pre style={{ margin: 0, fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: '#f1f5f9', padding: '10px 40px 10px 10px' }}>
                                         {chunk.metadata_text}
                                       </pre>
-                                      {/* The first chunk has no previous chunk to summarize */}
-                                      {index > 0 && (
+                                      {chunk.previous_summary_text != null && (
                                         <div style={{ position: 'relative', borderTop: '1px solid #e2e8f0' }}>
-                                          {regenerateButton(isRegeneratingSummary, () => regenerate(doc.id, chunk.chunk_id, 'previous-summary', 'previous_summary'), 'Regenerate summary')}
+                                          {regenerateButton(isRegeneratingSummary, () => regenerate(doc.id, chunk.chunk_id, 'previous-summary', 'previous_summary_text'), 'Regenerate summary')}
                                           <pre style={{ margin: 0, fontSize: '0.8rem', color: '#475569', whiteSpace: 'pre-wrap', backgroundColor: '#fef9c3', padding: '10px 40px 10px 10px' }}>
-                                            {'Summary of previous chunk:\n' + (chunk.previous_summary || 'No summary available.')}
+                                            {chunk.previous_summary_text}
                                           </pre>
                                         </div>
                                       )}

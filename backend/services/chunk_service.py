@@ -70,10 +70,15 @@ def get_document_chunks(doc_id: int):
             "label": _label(position, metadata),
             "metadata_text": format_metadata(metadata, _NO_METADATA),
             "chunk_text": chunk_text,
-            "previous_summary": previous_summary,
+            # The first chunk has no previous chunk to summarize
+            "previous_summary_text": _summary_text(previous_summary) if position > 1 else None,
         }
         for position, (chunk_id, metadata, chunk_text, previous_summary) in enumerate(rows, start=1)
     ]
+
+
+def _summary_text(summary: Optional[str]) -> str:
+    return "Summary of previous chunk:\n" + (summary or "No summary available.")
 
 
 def _label(position: int, metadata: Optional[dict]) -> str:
@@ -118,7 +123,7 @@ def regenerate_chunk_metadata(chunk_id: int) -> Optional[str]:
 def regenerate_previous_summary(chunk_id: int) -> Optional[str]:
     """Re-summarize the chunk before this one and store it as this chunk's previous_summary.
 
-    Returns the new summary, or None if the chunk is gone or is its document's first chunk.
+    Returns the new summary as display text, or None if the chunk is gone or is its document's first chunk.
     """
     with db_cursor() as cur:
         cur.execute(
@@ -140,4 +145,4 @@ def regenerate_previous_summary(chunk_id: int) -> Optional[str]:
         cur.execute("UPDATE chunks SET previous_summary = %s WHERE chunk_id = %s RETURNING previous_summary",
                     (summary, chunk_id))
         updated = cur.fetchone()
-    return None if updated is None else updated[0]
+    return None if updated is None else _summary_text(updated[0])
