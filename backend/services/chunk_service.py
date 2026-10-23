@@ -6,7 +6,7 @@ from psycopg2.extras import Json, execute_values
 from core.database import db_cursor
 from core.ml import embedder
 from services.display import format_metadata
-from services.tagging_service import generate_chunk_tags
+from services.tagging_service import generate_chunk_summaries, generate_chunk_tags
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ def replace_chunks(cur, doc_id: int, chunks: list[dict], embeddings: list[list[f
 def get_document_chunks(doc_id: int):
     with db_cursor() as cur:
         cur.execute(
-            "SELECT chunk_id, metadata FROM chunks WHERE doc_id = %s ORDER BY chunk_id",
+            "SELECT chunk_id, metadata, chunk_text, previous_summary FROM chunks WHERE doc_id = %s ORDER BY chunk_id",
             (doc_id,),
         )
         rows = cur.fetchall()
@@ -69,9 +69,16 @@ def get_document_chunks(doc_id: int):
             "chunk_id": chunk_id,
             "label": _label(position, metadata),
             "metadata_text": format_metadata(metadata, _NO_METADATA),
+            "chunk_text": chunk_text,
+            # The first chunk has no previous chunk to summarize
+            "previous_summary_text": _summary_text(previous_summary) if position > 1 else None,
         }
-        for position, (chunk_id, metadata) in enumerate(rows, start=1)
+        for position, (chunk_id, metadata, chunk_text, previous_summary) in enumerate(rows, start=1)
     ]
+
+
+def _summary_text(summary: Optional[str]) -> str:
+    return "Summary of previous chunk:\n" + (summary or "No summary available.")
 
 
 def _label(position: int, metadata: Optional[dict]) -> str:
@@ -85,7 +92,7 @@ def _label(position: int, metadata: Optional[dict]) -> str:
     return " · ".join(filter(None, [f"Chunk {position}", kind, group, page]))
 
 
-class TaggingFailed(Exception):
+class GenerationFailed(Exception):
     pass
 
 
@@ -100,7 +107,7 @@ def regenerate_chunk_metadata(chunk_id: int) -> Optional[str]:
     # Slow LLM call happens outside any transaction
     tags = generate_chunk_tags([row[0]])[0]
     if tags is None:
-        raise TaggingFailed(f"Tag generation failed for chunk {chunk_id}")
+        raise GenerationFailed(f"Tag generation failed for chunk {chunk_id}")
 
     # Merge so the chunk's type, page and section survive re-tagging
     with db_cursor() as cur:
@@ -111,3 +118,31 @@ def regenerate_chunk_metadata(chunk_id: int) -> Optional[str]:
         )
         updated = cur.fetchone()
     return None if updated is None else format_metadata(updated[0], _NO_METADATA)
+
+
+def regenerate_previous_summary(chunk_id: int) -> Optional[str]:
+    """Re-summarize the chunk before this one and store it as this chunk's previous_summary.
+
+    Returns the new summary as display text, or None if the chunk is gone or is its document's first chunk.
+    """
+    with db_cursor() as cur:
+        cur.execute(
+            """SELECT p.chunk_text FROM chunks c
+               JOIN chunks p ON p.doc_id = c.doc_id AND p.chunk_id < c.chunk_id
+               WHERE c.chunk_id = %s ORDER BY p.chunk_id DESC LIMIT 1""",
+            (chunk_id,),
+        )
+        row = cur.fetchone()
+    if row is None:
+        return None
+
+    # Slow LLM call happens outside any transaction
+    summary = generate_chunk_summaries([row[0]])[0]
+    if summary is None:
+        raise GenerationFailed(f"Summary generation failed for chunk {chunk_id}")
+
+    with db_cursor() as cur:
+        cur.execute("UPDATE chunks SET previous_summary = %s WHERE chunk_id = %s RETURNING previous_summary",
+                    (summary, chunk_id))
+        updated = cur.fetchone()
+    return None if updated is None else _summary_text(updated[0])

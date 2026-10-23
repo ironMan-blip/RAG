@@ -40,7 +40,7 @@ async def chat_endpoint(
 @router.get("/models")
 async def get_models():
     def format_name(m):
-        return m.split("/")[-1].replace(":free", "").replace("-", " ").title()
+        return m.split("/")[-1].replace("-", " ").title()
 
     models = [{"value": m, "label": format_name(m)} for m in settings.chat_models]
     return {"models": models, "default": models[0]["value"] if models else None}

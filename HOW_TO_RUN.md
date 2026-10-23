@@ -7,6 +7,7 @@ This document outlines the steps to run both the backend and frontend of the RAG
 - **Python 3.9+**
 - **Node.js & npm**
 - **PostgreSQL** running locally
+- **Ollama** running locally with the models in `backend/.env` pulled: `ollama pull llama3.1 && ollama pull qwen3:4b`
 
 ### 1. Database Setup
 Ensure you have a local PostgreSQL instance running. You need to create a database named `rag`.
@@ -35,9 +36,9 @@ The backend is built with FastAPI and runs on Python.
    ```
 4. Start the FastAPI server using Uvicorn:
    ```bash
-   uvicorn main:app --reload
+   uvicorn main:app --reload --port 8001
    ```
-   *The backend will typically be accessible at `http://localhost:8000`. You can view the API documentation at `http://localhost:8000/docs`.*
+   *The backend will typically be accessible at `http://localhost:8001`. You can view the API documentation at `http://localhost:8001/docs`.*
 
 ## 3. Running the Frontend
 
