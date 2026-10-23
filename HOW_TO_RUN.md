@@ -58,11 +58,6 @@ The frontend is a React application powered by Vite.
    ```
    *The frontend will usually be accessible at `http://localhost:5173`.*
 
-## Troubleshooting: servers hang on startup with no error
-The project lives on the iCloud-synced Desktop. If iCloud offloads files in `venv` or `node_modules`, every import blocks waiting for a download. Keep them out of iCloud:
-- `backend/venv` is a symlink to `backend/venv.nosync` (iCloud skips `*.nosync`).
-- After a fresh `npm install`, run `xattr -w 'com.apple.fileprovider.ignore#P' 1 frontend/node_modules`.
-
 ## 4. Usage
 Once both the backend and frontend are running:
 1. Open your browser and go to the frontend URL (e.g., `http://localhost:5173`).
