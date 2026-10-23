@@ -60,7 +60,7 @@ def replace_chunks(cur, doc_id: int, chunks: list[dict], embeddings: list[list[f
 def get_document_chunks(doc_id: int):
     with db_cursor() as cur:
         cur.execute(
-            "SELECT chunk_id, metadata, chunk_text FROM chunks WHERE doc_id = %s ORDER BY chunk_id",
+            "SELECT chunk_id, metadata, chunk_text, previous_summary FROM chunks WHERE doc_id = %s ORDER BY chunk_id",
             (doc_id,),
         )
         rows = cur.fetchall()
@@ -70,8 +70,9 @@ def get_document_chunks(doc_id: int):
             "label": _label(position, metadata),
             "metadata_text": format_metadata(metadata, _NO_METADATA),
             "chunk_text": chunk_text,
+            "previous_summary": previous_summary,
         }
-        for position, (chunk_id, metadata, chunk_text) in enumerate(rows, start=1)
+        for position, (chunk_id, metadata, chunk_text, previous_summary) in enumerate(rows, start=1)
     ]
 
 

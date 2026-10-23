@@ -395,6 +395,11 @@ export default function DatabaseExplorer({ onClose }) {
                                       <pre style={{ margin: 0, fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: '#f1f5f9', padding: '10px 40px 10px 10px' }}>
                                         {chunk.metadata_text}
                                       </pre>
+                                      {chunk.previous_summary && (
+                                        <pre style={{ margin: 0, fontSize: '0.8rem', color: '#475569', whiteSpace: 'pre-wrap', backgroundColor: '#fef9c3', padding: '10px', borderTop: '1px solid #e2e8f0' }}>
+                                          {'Summary of previous chunk:\n' + chunk.previous_summary}
+                                        </pre>
+                                      )}
                                       <pre style={{ margin: 0, fontSize: '0.8rem', color: '#1e293b', whiteSpace: 'pre-wrap', padding: '10px', borderTop: '1px solid #e2e8f0', maxHeight: '400px', overflowY: 'auto' }}>
                                         {chunk.chunk_text}
                                       </pre>
