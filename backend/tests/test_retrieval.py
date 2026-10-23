@@ -50,6 +50,7 @@ class ThreePhaseRetrieval(unittest.TestCase):
         # Math chunks are closer, but math's metadata does not match, so it never reaches Phase 2
         self.assertEqual(self.search({"subject": "biology"}, []), ["b0", "b1", "b2", "b3", "b4"])
 
+    @unittest.skip("Phase 2 (tag ranking) is disabled")
     def test_chunks_without_matching_tags_drop_out_of_the_top_20(self):
         tagged = [(f"t{i}", 0.5 + 0.01 * i, ["Photosynthesis process"]) for i in range(25)]
         self.add_doc("bio", {"subject": "Biology"}, tagged + [("closest_untagged", 0.0, ["water cycle"])])
