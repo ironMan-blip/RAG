@@ -32,8 +32,10 @@ CREATE TABLE IF NOT EXISTS chunks (
 );
 
 CREATE INDEX IF NOT EXISTS chunks_doc_id_idx ON chunks (doc_id);
--- Approximate nearest-neighbour search (<-> is L2 distance) for ORDER BY chunk_embedding <-> q LIMIT k.
-CREATE INDEX IF NOT EXISTS chunks_embedding_idx ON chunks USING hnsw (chunk_embedding vector_l2_ops);
+-- Approximate nearest-neighbour search for ORDER BY chunk_embedding <=> q LIMIT k; cosine ops to match
+-- retrieval_service's <=> (cosine distance). Existing databases had an L2 index under the old name.
+DROP INDEX IF EXISTS chunks_embedding_idx;
+CREATE INDEX IF NOT EXISTS chunks_embedding_cosine_idx ON chunks USING hnsw (chunk_embedding vector_cosine_ops);
 
 CREATE TABLE IF NOT EXISTS chats (
     id VARCHAR(255) PRIMARY KEY,
