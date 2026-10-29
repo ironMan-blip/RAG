@@ -7,6 +7,7 @@ class ChatMessage(BaseModel):
     sender: str
     text: str
     prompt: Optional[str] = None  # bot turns only: the full prompt the LLM received
+    timings: Optional[list[dict]] = None  # bot turns only: [{"step", "ms"}] in pipeline order
 
 
 class ChatResponse(BaseModel):

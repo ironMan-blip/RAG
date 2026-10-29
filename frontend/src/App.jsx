@@ -4,6 +4,26 @@ import { useNavigate } from 'react-router-dom';
 import './App.css';
 import { API_BASE } from './api';
 
+// One segment per backend pipeline step, width proportional to its time
+function TimingBar({ timings }) {
+  const total = timings.reduce((sum, t) => sum + t.ms, 0)
+  return (
+    <div className="timing" onClick={e => e.stopPropagation()}>
+      <div className="timing-bar" role="img" aria-label={`Reply took ${total} ms`}>
+        {timings.map((t, i) => (
+          <span key={i} className={`timing-seg seg-${i % 5}`} style={{ flexGrow: Math.max(t.ms, 1) }} title={`${t.step}: ${t.ms} ms`} />
+        ))}
+      </div>
+      <div className="timing-legend">
+        {timings.map((t, i) => (
+          <span key={i}><i className={`seg-${i % 5}`} />{t.step} {t.ms} ms</span>
+        ))}
+        <span className="timing-total">total {total} ms</span>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
@@ -276,6 +296,7 @@ function App() {
               >
                 {msg.text}
                 {openPromptIdx === idx && <pre className="prompt-view" onClick={e => e.stopPropagation()}>{msg.prompt}</pre>}
+                {msg.timings?.length > 0 && <TimingBar timings={msg.timings} />}
               </div>
               {msg.sender === 'user' && (
                 <div className="avatar user-avatar">

@@ -48,10 +48,12 @@ CREATE TABLE IF NOT EXISTS chat_history (
     bot_reply TEXT NOT NULL,
     model TEXT,
     prompt TEXT, -- full prompt (system + user) sent to the LLM for this turn
+    timings JSONB, -- [{"step", "ms"}] per pipeline step, in order; for finding slow steps
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Existing databases created before the prompt column
 ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS prompt TEXT;
+ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS timings JSONB;
 
 CREATE INDEX IF NOT EXISTS chat_history_session_idx ON chat_history (session_id, created_at);

@@ -216,6 +216,51 @@ body {
   cursor: text;
 }
 
+.timing {
+  margin-top: 12px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.timing-bar {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.timing-seg {
+  flex-basis: 0;
+}
+
+.timing-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 6px;
+}
+
+.timing-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 4px;
+}
+
+.timing-total {
+  margin-left: auto;
+  font-weight: 600;
+}
+
+.seg-0 { background: #2563eb; }
+.seg-1 { background: #16a34a; }
+.seg-2 { background: #d97706; }
+.seg-3 { background: #9333ea; }
+.seg-4 { background: #dc2626; }
+
 .user-message {
   background-color: var(--user-msg-bg);
   color: var(--user-msg-text);

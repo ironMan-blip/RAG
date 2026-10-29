@@ -1,5 +1,7 @@
 import logging
 
+from psycopg2.extras import Json
+
 from core.database import db_cursor
 
 logger = logging.getLogger(__name__)
@@ -23,15 +25,15 @@ def get_recent_chat_history(session_id: str, limit: int = 5) -> list[tuple[str, 
         return []
 
 
-def save_chat_history(session_id: str, message: str, bot_reply: str, model: str, prompt: str, chat_title: str = None):
+def save_chat_history(session_id: str, message: str, bot_reply: str, model: str, prompt: str, timings: list, chat_title: str = None):
     with db_cursor() as cur:
         cur.execute(
             "INSERT INTO chats (id, name) VALUES (%s, %s) ON CONFLICT (id) DO NOTHING",
             (session_id, chat_title or "New Chat")
         )
         cur.execute(
-            "INSERT INTO chat_history (session_id, user_message, bot_reply, model, prompt) VALUES (%s, %s, %s, %s, %s)",
-            (session_id, message, bot_reply, model, prompt)
+            "INSERT INTO chat_history (session_id, user_message, bot_reply, model, prompt, timings) VALUES (%s, %s, %s, %s, %s, %s)",
+            (session_id, message, bot_reply, model, prompt, Json(timings))
         )
 
 
@@ -43,12 +45,12 @@ def get_all_chats():
 
 def get_full_chat_history(session_id: str):
     with db_cursor() as cur:
-        cur.execute("SELECT user_message, bot_reply, prompt FROM chat_history WHERE session_id = %s ORDER BY created_at ASC", (session_id,))
+        cur.execute("SELECT user_message, bot_reply, prompt, timings FROM chat_history WHERE session_id = %s ORDER BY created_at ASC", (session_id,))
         rows = cur.fetchall()
     history = [GREETING]
-    for user_message, bot_reply, prompt in rows:
+    for user_message, bot_reply, prompt, timings in rows:
         history.append({"sender": "user", "text": user_message})
-        history.append({"sender": "bot", "text": bot_reply, "prompt": prompt})
+        history.append({"sender": "bot", "text": bot_reply, "prompt": prompt, "timings": timings})
     return history
 
 

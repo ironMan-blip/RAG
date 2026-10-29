@@ -1,6 +1,8 @@
 import contextvars
 import logging
 import threading
+import time
+from contextlib import contextmanager
 
 from langsmith import traceable, wrappers
 from openai import OpenAI
@@ -25,22 +27,41 @@ CONTEXT_PROMPT = (
 )
 
 
-def _save_turn(session_id: str, message: str, bot_reply: str, model: str, prompt: str, is_new_chat: bool):
+@contextmanager
+def timed(timings: list, step: str):
+    """Appends {"step", "ms"} to timings once the block finishes; order = pipeline order."""
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        timings.append({"step": step, "ms": round((time.perf_counter() - start) * 1000)})
+
+
+def _save_turn(session_id: str, message: str, bot_reply: str, model: str, prompt: str, timings: list, is_new_chat: bool):
     try:
         title = generate_chat_title(message) if is_new_chat else None
-        save_chat_history(session_id, message, bot_reply, model, prompt, title)
+        save_chat_history(session_id, message, bot_reply, model, prompt, timings, title)
     except Exception:
         logger.exception("Error saving chat history")
 
 
 @traceable
-def get_chat_completion(message: str, attached_filename: str = None, model: str = None, session_id: str = None) -> tuple[str, str]:
-    """Sends a message to the AI; returns (reply, the full prompt it received)."""
-    history = get_recent_chat_history(session_id, limit=5)
+def get_chat_completion(message: str, attached_filename: str = None, model: str = None, session_id: str = None, timings: list = None) -> tuple[str, str, list]:
+    """Sends a message to the AI; returns (reply, the full prompt it received, per-step timings).
+    `timings` may arrive pre-filled with steps the caller already ran (e.g. file processing)."""
+    timings = timings if timings is not None else []
+    with timed(timings, "history"):
+        history = get_recent_chat_history(session_id, limit=5)
 
     system_prompt = SYSTEM_PROMPT
-    if attached_filename or decide_if_context_needed(message, history[-3:], session_id):
-        db_context = get_database_context(message, attached_filename, session_id)
+    if attached_filename:
+        needs_context = True
+    else:
+        with timed(timings, "decide"):
+            needs_context = decide_if_context_needed(message, history[-3:], session_id)
+    if needs_context:
+        with timed(timings, "retrieval"):
+            db_context = get_database_context(message, attached_filename, session_id)
         if db_context:
             system_prompt += CONTEXT_PROMPT.format(context=db_context)
 
@@ -53,13 +74,14 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": message}
     ]
-    response = client.chat.completions.create(model=used_model, messages=messages)
+    with timed(timings, "llm"):
+        response = client.chat.completions.create(model=used_model, messages=messages)
     bot_reply = response.choices[0].message.content
     prompt = "\n\n".join(f"[{m['role'].upper()}]\n{m['content']}" for m in messages)
 
     if session_id:
         # Title generation is a second LLM call; keep it off the response path
         # copy_context keeps the title call nested in this LangSmith trace
-        threading.Thread(target=contextvars.copy_context().run, args=(_save_turn, session_id, message, bot_reply, used_model, prompt, not history), daemon=True).start()
+        threading.Thread(target=contextvars.copy_context().run, args=(_save_turn, session_id, message, bot_reply, used_model, prompt, timings, not history), daemon=True).start()
 
-    return bot_reply, prompt
+    return bot_reply, prompt, timings
