@@ -22,6 +22,16 @@ _PROFILE_FIELDS = ("year", "grade", "subject", "topic", "subtopic")
 #          either way, so "8" matches "Grade 8"); if none match, every document in scope.
 # Phase 2: top 10 of their chunks by how many query keywords hit a chunk tag; ties go to the closer chunk.
 # Phase 3: the 5 of those nearest to the query embedding.
+#
+# Distance: <-> is pgvector's L2 (Euclidean) distance. The embedder normalizes every vector to length 1,
+#   so L2 = sqrt(2 - 2 * cosine): same order as cosine similarity, which the model is trained for.
+#   0 = same direction, sqrt(2) ~ 1.41 = unrelated, 2 = opposite.
+# Phase 2 computes the distance once per chunk of the top documents (it breaks tag-count ties);
+#   Phase 3 only sorts the 10 survivors by that stored value and keeps 5.
+# Exact, not approximate: ORDER BY starts with the tag count, so the HNSW index cannot supply the order
+#   and Postgres scans and scores every chunk of the top documents.
+# shortcut: no distance cutoff, so the 5 nearest are returned even when all are far; add one if
+#   off-topic excerpts reach the prompt.
 _CONTEXT_SQL = """
     WITH scored AS (
         SELECT d.id FROM documents d,

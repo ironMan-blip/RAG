@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS chunks (
 );
 
 CREATE INDEX IF NOT EXISTS chunks_doc_id_idx ON chunks (doc_id);
--- Approximate nearest-neighbour search for retrieval (<-> is L2 distance)
+-- Approximate nearest-neighbour search (<-> is L2 distance). Only used by a plain
+-- ORDER BY chunk_embedding <-> q LIMIT k; retrieval_service ranks by tag hits first, so it scans exactly.
 CREATE INDEX IF NOT EXISTS chunks_embedding_idx ON chunks USING hnsw (chunk_embedding vector_l2_ops);
 
 CREATE TABLE IF NOT EXISTS chats (
