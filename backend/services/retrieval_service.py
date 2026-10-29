@@ -20,13 +20,14 @@ _PROFILE_FIELDS = ("year", "grade", "subject", "topic", "subtopic")
 
 # Phase 1: top 10 documents by how many profile fields match their metadata (case-insensitive substring
 #          either way, so "8" matches "Grade 8"); if none match, every document in scope.
-# Phase 2: the 5 chunks of those documents nearest to the query embedding.
+# Phase 2: every chunk of those documents with cosine similarity >= MIN_SIMILARITY to the query embedding,
+#          most similar first.
 #
-# Distance: <-> is pgvector's L2 (Euclidean) distance. The embedder normalizes every vector to length 1,
-#   so L2 = sqrt(2 - 2 * cosine): same order as cosine similarity, which the model is trained for.
-#   0 = same direction, sqrt(2) ~ 1.41 = unrelated, 2 = opposite.
-# shortcut: no distance cutoff, so the 5 nearest are returned even when all are far; add one if
-#   off-topic excerpts reach the prompt.
+# Similarity: <=> is pgvector's cosine distance, so 1 - (a <=> b) is cosine similarity:
+#   1 = same direction, 0 = unrelated, -1 = opposite.
+# shortcut: no cap on chunk count, so a broad query over big documents can send many excerpts to the
+#   LLM; add a LIMIT if prompts get too long.
+MIN_SIMILARITY = 0.7
 _CONTEXT_SQL = """
     WITH scored AS (
         SELECT d.id FROM documents d,
@@ -49,14 +50,14 @@ _CONTEXT_SQL = """
     FROM chunks c
     JOIN documents d ON d.id = c.doc_id
     WHERE c.doc_id IN (SELECT id FROM top_docs)
-    ORDER BY c.chunk_embedding <-> %(query)s::vector
-    LIMIT 5
+      AND 1 - (c.chunk_embedding <=> %(query)s::vector) >= %(min_similarity)s
+    ORDER BY c.chunk_embedding <=> %(query)s::vector
 """
 
 
 @traceable
 def get_database_context(query: str, attached_filename: str = None, session_id: str = None) -> str:
-    """5 chunks for the query, narrowed by document metadata, then vector distance."""
+    """Chunks for the query, narrowed by document metadata, then a cosine similarity cutoff."""
     profile = generate_query_profile(query)
     # An attached file is already the chosen document, so its metadata is not scored
     metadata = {} if attached_filename else {
@@ -67,6 +68,7 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
         "profile": json.dumps(metadata),
         "filename": attached_filename,
         "session_id": session_id,
+        "min_similarity": MIN_SIMILARITY,
     }
     scope = "d.filename = %(filename)s" if attached_filename else "d.session_id IS NULL OR d.session_id = %(session_id)s"
     try:

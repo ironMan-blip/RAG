@@ -7,7 +7,7 @@ import uuid
 from psycopg2.extras import Json
 
 from core.database import pool
-from services.retrieval_service import _CONTEXT_SQL
+from services.retrieval_service import _CONTEXT_SQL, MIN_SIMILARITY
 
 DIM = 1024
 # Only this test's session, so real documents never compete
@@ -41,14 +41,14 @@ class TwoPhaseRetrieval(unittest.TestCase):
 
     def search(self, profile: dict) -> list[str]:
         self.cur.execute(SQL, {"query": vec(0), "profile": json.dumps(profile),
-                               "session_id": self.session, "filename": None})
+                               "session_id": self.session, "filename": None, "min_similarity": MIN_SIMILARITY})
         return [text for _, text, _ in self.cur.fetchall()]
 
     def test_only_documents_matching_the_profile_are_searched(self):
         self.add_doc("math", {"subject": "Mathematics", "grade": "Grade 8"}, [(f"m{i}", 0.01 * i) for i in range(6)])
         self.add_doc("bio", {"subject": "Biology", "grade": "Grade 8"}, [(f"b{i}", 0.5 + 0.01 * i) for i in range(6)])
         # Math chunks are closer, but math's metadata does not match, so it is never searched
-        self.assertEqual(self.search({"subject": "biology"}), ["b0", "b1", "b2", "b3", "b4"])
+        self.assertEqual(self.search({"subject": "biology"}), ["b0", "b1", "b2", "b3", "b4", "b5"])
 
     def test_no_matching_document_falls_back_to_all_documents(self):
         self.add_doc("math", {"subject": "Mathematics"}, [("m0", 0.1)])
@@ -56,9 +56,10 @@ class TwoPhaseRetrieval(unittest.TestCase):
         self.assertEqual(self.search({"subject": "history"}), ["m0", "b0"])
         self.assertEqual(self.search({}), ["m0", "b0"])
 
-    def test_returns_at_most_five_chunks(self):
-        self.add_doc("bio", {"subject": "Biology"}, [(f"b{i}", 0.01 * i) for i in range(12)])
-        self.assertEqual(len(self.search({"subject": "biology"})), 5)
+    def test_returns_every_chunk_at_or_above_the_similarity_cutoff(self):
+        # cos(0.7) ~ 0.76 passes, cos(0.9) ~ 0.62 fails
+        self.add_doc("bio", {"subject": "Biology"}, [(f"b{i}", 0.01 * i) for i in range(12)] + [("near", 0.7), ("far", 0.9)])
+        self.assertEqual(self.search({"subject": "biology"}), [f"b{i}" for i in range(12)] + ["near"])
 
 
 if __name__ == "__main__":
