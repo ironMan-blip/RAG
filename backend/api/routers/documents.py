@@ -5,7 +5,7 @@ from services import chunk_service, document_service, upload_jobs
 
 router = APIRouter()
 
-MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 @router.post("/upload", status_code=202)
@@ -14,7 +14,7 @@ async def upload_file(file: UploadFile = File(...), source: str = Form('library'
         raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
     # Starlette spools the body to disk, so size is known before reading it into memory
     if file.size is None or file.size > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail=f"{file.filename} is larger than the 20 MB limit.")
+        raise HTTPException(status_code=413, detail=f"{file.filename} is larger than the 50 MB limit.")
     return {"upload": document_service.start_upload(file.filename, await file.read(), file.content_type, source)}
 
 

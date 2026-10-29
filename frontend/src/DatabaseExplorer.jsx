@@ -195,32 +195,36 @@ export default function DatabaseExplorer() {
 
   const handleFileUpload = async (event) => {
     const source = uploadSourceRef.current;
-    const file = event.target.files[0];
-    if (!file) return;
+    const files = [...event.target.files];
+    if (!files.length) return;
 
     setIsUploading(true);
     setError(null);
+    const errors = [];
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (source) formData.append('source', source);
-      
-      const res = await fetch(`${API_BASE}/upload`, {
-        method: 'POST',
-        body: formData,
-      });
+      // One request per file; the backend queues each as its own upload job
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (source) formData.append('source', source);
 
-      if (res.ok) {
+        const res = await fetch(`${API_BASE}/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!res.ok) {
+          // Backend explains rejections (size limit, unknown source); validation errors come as a list
+          const { detail } = await res.json().catch(() => ({}));
+          errors.push(typeof detail === 'string' ? detail : `Couldn't upload ${file.name}. Check the file type and try again.`);
+        }
         await fetchUploads();
-      } else {
-        // Backend explains rejections (size limit, unknown source); validation errors come as a list
-        const { detail } = await res.json().catch(() => ({}));
-        setError(typeof detail === 'string' ? detail : `Couldn't upload ${file.name}. Check the file type and try again.`);
       }
     } catch (error) {
       console.error("Failed to upload document", error);
-      setError("Couldn't reach the server to upload the document.");
+      errors.push("Couldn't reach the server to upload the document.");
     } finally {
+      if (errors.length) setError(errors.join(' '));
       setIsUploading(false);
       if (uploadInputRef.current) uploadInputRef.current.value = "";
     }
@@ -237,7 +241,7 @@ export default function DatabaseExplorer() {
           <span className="explorer-count">{documents.length} {documents.length === 1 ? 'document' : 'documents'}</span>
         )}
         <div className="explorer-actions">
-          <input type="file" ref={uploadInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
+          <input type="file" multiple ref={uploadInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
           {uploadSources.map(src => (
             <button
               key={src.value}
