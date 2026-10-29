@@ -21,13 +21,14 @@ _PROFILE_FIELDS = ("year", "grade", "subject", "topic", "subtopic")
 # Phase 1: top 10 documents by how many profile fields match their metadata (case-insensitive substring
 #          either way, so "8" matches "Grade 8"); if none match, every document in scope.
 # Phase 2: every chunk of those documents with cosine similarity >= MIN_SIMILARITY to the query embedding,
-#          most similar first.
+#          most similar first; the MIN_CHUNKS most similar always pass, so a low-scoring query still gets context.
 #
 # Similarity: <=> is pgvector's cosine distance, so 1 - (a <=> b) is cosine similarity:
 #   1 = same direction, 0 = unrelated, -1 = opposite.
 # shortcut: no cap on chunk count, so a broad query over big documents can send many excerpts to the
 #   LLM; add a LIMIT if prompts get too long.
 MIN_SIMILARITY = 0.7
+MIN_CHUNKS = 3
 _CONTEXT_SQL = """
     WITH scored AS (
         SELECT d.id FROM documents d,
@@ -45,13 +46,19 @@ _CONTEXT_SQL = """
         SELECT id FROM scored
         UNION ALL
         SELECT d.id FROM documents d WHERE ({scope}) AND NOT EXISTS (SELECT 1 FROM scored)
+    ),
+    ranked AS (
+        SELECT d.filename, c.chunk_text, c.previous_summary,
+               c.chunk_embedding <=> %(query)s::vector AS distance,
+               row_number() OVER (ORDER BY c.chunk_embedding <=> %(query)s::vector) AS rank
+        FROM chunks c
+        JOIN documents d ON d.id = c.doc_id
+        WHERE c.doc_id IN (SELECT id FROM top_docs)
     )
-    SELECT d.filename, c.chunk_text, c.previous_summary
-    FROM chunks c
-    JOIN documents d ON d.id = c.doc_id
-    WHERE c.doc_id IN (SELECT id FROM top_docs)
-      AND 1 - (c.chunk_embedding <=> %(query)s::vector) >= %(min_similarity)s
-    ORDER BY c.chunk_embedding <=> %(query)s::vector
+    SELECT filename, chunk_text, previous_summary
+    FROM ranked
+    WHERE rank <= %(min_chunks)s OR 1 - distance >= %(min_similarity)s
+    ORDER BY distance
 """
 
 
@@ -69,6 +76,7 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
         "filename": attached_filename,
         "session_id": session_id,
         "min_similarity": MIN_SIMILARITY,
+        "min_chunks": MIN_CHUNKS,
     }
     scope = "d.filename = %(filename)s" if attached_filename else "d.session_id IS NULL OR d.session_id = %(session_id)s"
     try:
