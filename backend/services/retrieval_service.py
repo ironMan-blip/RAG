@@ -20,16 +20,11 @@ _PROFILE_FIELDS = ("year", "grade", "subject", "topic", "subtopic")
 
 # Phase 1: top 10 documents by how many profile fields match their metadata (case-insensitive substring
 #          either way, so "8" matches "Grade 8"); if none match, every document in scope.
-# Phase 2: top 10 of their chunks by how many query keywords hit a chunk tag; ties go to the closer chunk.
-# Phase 3: the 5 of those nearest to the query embedding.
+# Phase 2: the 5 chunks of those documents nearest to the query embedding.
 #
 # Distance: <-> is pgvector's L2 (Euclidean) distance. The embedder normalizes every vector to length 1,
 #   so L2 = sqrt(2 - 2 * cosine): same order as cosine similarity, which the model is trained for.
 #   0 = same direction, sqrt(2) ~ 1.41 = unrelated, 2 = opposite.
-# Phase 2 computes the distance once per chunk of the top documents (it breaks tag-count ties);
-#   Phase 3 only sorts the 10 survivors by that stored value and keeps 5.
-# Exact, not approximate: ORDER BY starts with the tag count, so the HNSW index cannot supply the order
-#   and Postgres scans and scores every chunk of the top documents.
 # shortcut: no distance cutoff, so the 5 nearest are returned even when all are far; add one if
 #   off-topic excerpts reach the prompt.
 _CONTEXT_SQL = """
@@ -49,30 +44,19 @@ _CONTEXT_SQL = """
         SELECT id FROM scored
         UNION ALL
         SELECT d.id FROM documents d WHERE ({scope}) AND NOT EXISTS (SELECT 1 FROM scored)
-    ),
-    top_chunks AS (
-        SELECT c.chunk_id, c.chunk_embedding <-> %(query)s::vector AS distance
-        FROM chunks c
-        WHERE c.doc_id IN (SELECT id FROM top_docs)
-        ORDER BY
-            (SELECT count(*) FROM unnest(%(keywords)s::text[]) kw
-             WHERE EXISTS (SELECT 1 FROM jsonb_array_elements_text(c.metadata->'tags') t
-                           WHERE t ILIKE '%%' || kw || '%%')) DESC,
-            distance
-        LIMIT 10
     )
     SELECT d.filename, c.chunk_text, c.previous_summary
-    FROM top_chunks tc
-    JOIN chunks c USING (chunk_id)
+    FROM chunks c
     JOIN documents d ON d.id = c.doc_id
-    ORDER BY tc.distance
+    WHERE c.doc_id IN (SELECT id FROM top_docs)
+    ORDER BY c.chunk_embedding <-> %(query)s::vector
     LIMIT 5
 """
 
 
 @traceable
 def get_database_context(query: str, attached_filename: str = None, session_id: str = None) -> str:
-    """5 chunks for the query, narrowed by document metadata, then chunk tags, then vector distance."""
+    """5 chunks for the query, narrowed by document metadata, then vector distance."""
     profile = generate_query_profile(query)
     # An attached file is already the chosen document, so its metadata is not scored
     metadata = {} if attached_filename else {
@@ -81,7 +65,6 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
     params = {
         "query": str(embedder.encode_query(query).tolist()),
         "profile": json.dumps(metadata),
-        "keywords": [k.strip() for k in profile.get("keywords", []) if isinstance(k, str) and k.strip()],
         "filename": attached_filename,
         "session_id": session_id,
     }

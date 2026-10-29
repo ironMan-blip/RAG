@@ -38,7 +38,6 @@ class QueryProfile(BaseModel):
     subject: str = Field(description="The subject of the question, or empty string if unclear")
     topic: str = Field(description="The topic of the question, or empty string if unclear")
     subtopic: str = Field(description="The subtopic of the question, or empty string if unclear")
-    keywords: list[str] = Field(description="Exactly 10 search keywords for the question", min_length=10, max_length=10)
 
 
 class ChatTitle(BaseModel):
@@ -70,7 +69,7 @@ def _chain(schema: type[BaseModel], instruction: str):
 _document_chain = _chain(DocumentMetadata, "Given the following document, generate its metadata.")
 _chunk_chain = _chain(ChunkTags, "Given the following text chunk, generate descriptive tags.")
 _summary_chain = _chain(ChunkSummary, "Given the following text chunk, summarize it.")
-_query_chain = _chain(QueryProfile, "Given the following user question, guess its metadata and search keywords.")
+_query_chain = _chain(QueryProfile, "Given the following user question, guess its metadata.")
 _title_chain = _chain(ChatTitle, "Given the following first message of a chat, write a short title for the chat.")
 
 
@@ -107,7 +106,7 @@ def generate_chunk_summaries(texts: list[str]) -> list[Optional[str]]:
 
 @traceable
 def generate_query_profile(text: str) -> dict:
-    """Guessed year, grade, subject, topic, subtopic and 10 keywords for a question; {} on failure."""
+    """Guessed year, grade, subject, topic, subtopic for a question; {} on failure."""
     return _run(_query_chain, [text])[0] or {}
 
 
