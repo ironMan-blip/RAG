@@ -5,8 +5,7 @@ import './App.css';
 import { API_BASE } from './api';
 
 // One segment per backend pipeline step, width proportional to its time
-function TimingBar({ timings }) {
-  const total = timings.reduce((sum, t) => sum + t.ms, 0)
+function TimingBar({ timings, total }) {
   return (
     <div className="timing" onClick={e => e.stopPropagation()}>
       <div className="timing-bar" role="img" aria-label={`Reply took ${total} ms`}>
@@ -297,7 +296,7 @@ function App() {
               >
                 {msg.text}
                 {openPromptIdx === idx && <pre className="prompt-view" onClick={e => e.stopPropagation()}>{msg.prompt}</pre>}
-                {msg.timings?.length > 0 && <TimingBar timings={msg.timings} />}
+                {msg.timings?.length > 0 && <TimingBar timings={msg.timings} total={msg.total_ms} />}
               </div>
               {msg.sender === 'user' && (
                 <div className="avatar user-avatar">

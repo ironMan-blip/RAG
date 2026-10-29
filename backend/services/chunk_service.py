@@ -77,6 +77,15 @@ def get_document_chunks(doc_id: int):
     ]
 
 
+def get_chunk(chunk_id: int) -> Optional[dict]:
+    """One chunk in the same display shape as get_document_chunks, or None if it is gone."""
+    with db_cursor() as cur:
+        cur.execute("SELECT doc_id FROM chunks WHERE chunk_id = %s", (chunk_id,))
+        row = cur.fetchone()
+    # shortcut: reads the whole document because the label needs the chunk's position; fine at current doc sizes
+    return None if row is None else next((c for c in get_document_chunks(row[0]) if c["chunk_id"] == chunk_id), None)
+
+
 def _summary_text(summary: Optional[str]) -> str:
     return "Summary of previous chunk:\n" + (summary or "No summary available.")
 
@@ -96,8 +105,8 @@ class GenerationFailed(Exception):
     pass
 
 
-def regenerate_chunk_metadata(chunk_id: int) -> Optional[str]:
-    """Re-tag one chunk and store the result. Returns its new metadata text, or None if the chunk is gone."""
+def regenerate_chunk_metadata(chunk_id: int) -> Optional[dict]:
+    """Re-tag one chunk and store the result. Returns the updated chunk, or None if the chunk is gone."""
     with db_cursor() as cur:
         cur.execute("SELECT chunk_text FROM chunks WHERE chunk_id = %s", (chunk_id,))
         row = cur.fetchone()
@@ -113,17 +122,16 @@ def regenerate_chunk_metadata(chunk_id: int) -> Optional[str]:
     with db_cursor() as cur:
         cur.execute(
             """UPDATE chunks SET metadata = COALESCE(metadata, jsonb_build_object('document_id', doc_id)) || %s
-               WHERE chunk_id = %s RETURNING metadata""",
+               WHERE chunk_id = %s""",
             (Json({"tags": tags}), chunk_id),
         )
-        updated = cur.fetchone()
-    return None if updated is None else format_metadata(updated[0], _NO_METADATA)
+    return get_chunk(chunk_id)
 
 
-def regenerate_previous_summary(chunk_id: int) -> Optional[str]:
+def regenerate_previous_summary(chunk_id: int) -> Optional[dict]:
     """Re-summarize the chunk before this one and store it as this chunk's previous_summary.
 
-    Returns the new summary as display text, or None if the chunk is gone or is its document's first chunk.
+    Returns the updated chunk, or None if the chunk is gone or is its document's first chunk.
     """
     with db_cursor() as cur:
         cur.execute(
@@ -142,7 +150,5 @@ def regenerate_previous_summary(chunk_id: int) -> Optional[str]:
         raise GenerationFailed(f"Summary generation failed for chunk {chunk_id}")
 
     with db_cursor() as cur:
-        cur.execute("UPDATE chunks SET previous_summary = %s WHERE chunk_id = %s RETURNING previous_summary",
-                    (summary, chunk_id))
-        updated = cur.fetchone()
-    return None if updated is None else _summary_text(updated[0])
+        cur.execute("UPDATE chunks SET previous_summary = %s WHERE chunk_id = %s", (summary, chunk_id))
+    return get_chunk(chunk_id)
