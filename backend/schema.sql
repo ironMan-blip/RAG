@@ -32,8 +32,9 @@ CREATE TABLE IF NOT EXISTS chunks (
 );
 
 CREATE INDEX IF NOT EXISTS chunks_doc_id_idx ON chunks (doc_id);
--- Approximate nearest-neighbour search for retrieval (<-> is L2 distance)
-CREATE INDEX IF NOT EXISTS chunks_embedding_idx ON chunks USING hnsw (chunk_embedding vector_l2_ops);
+-- Approximate nearest-neighbour search for ORDER BY chunk_embedding <=> q LIMIT k; cosine ops to match
+-- retrieval_service's <=> (cosine distance)
+CREATE INDEX IF NOT EXISTS chunks_embedding_cosine_idx ON chunks USING hnsw (chunk_embedding vector_cosine_ops);
 
 CREATE TABLE IF NOT EXISTS chats (
     id VARCHAR(255) PRIMARY KEY,
@@ -48,10 +49,23 @@ CREATE TABLE IF NOT EXISTS chat_history (
     bot_reply TEXT NOT NULL,
     model TEXT,
     prompt TEXT, -- full prompt (system + user) sent to the LLM for this turn
+    timings JSONB, -- [{"step", "ms"}] per pipeline step, in order; for finding slow steps
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Existing databases created before the prompt column
-ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS prompt TEXT;
+-- Uploads still processing: the file plus every result finished so far, so a restart resumes instead of
+-- starting over. A row is deleted when its document is saved (or processing fails).
+CREATE TABLE IF NOT EXISTS upload_jobs (
+    id VARCHAR(255) PRIMARY KEY,
+    filename VARCHAR(255) NOT NULL,
+    source VARCHAR(255) NOT NULL, -- 'library' or 'tools'
+    content BYTEA NOT NULL,
+    content_type VARCHAR(255),
+    chunks JSONB, -- extracted chunks; NULL until extraction finishes
+    doc_metadata JSONB, -- tools only
+    tags JSONB, -- per chunk, null entries not generated yet
+    summaries JSONB, -- per chunk, null entries not generated yet
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 CREATE INDEX IF NOT EXISTS chat_history_session_idx ON chat_history (session_id, created_at);

@@ -1,20 +1,48 @@
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
-from services import chunk_service, document_service
+from services import chunk_service, document_service, upload_jobs
 
 router = APIRouter()
 
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
-@router.post("/upload")
+
+@router.post("/upload", status_code=202)
 async def upload_file(file: UploadFile = File(...), source: str = Form('library')):
-    source_id = document_service.SOURCE_IDS.get(source)
-    if source_id is None:
+    if source not in document_service.SOURCE_IDS:
         raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
-    upload_message = await run_in_threadpool(
-        document_service.process_and_save_document, file.filename, await file.read(), file.content_type, source_id
-    )
-    return {"filename": file.filename, "status": "success", "message": upload_message}
+    # Starlette spools the body to disk, so size is known before reading it into memory
+    if file.size is None or file.size > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"{file.filename} is larger than the 50 MB limit.")
+    return {"upload": document_service.start_upload(file.filename, await file.read(), file.content_type, source)}
+
+
+@router.get("/uploads")
+async def get_uploads():
+    return {"uploads": document_service.list_uploads()}
+
+
+@router.delete("/uploads/{job_id}")
+async def cancel_upload(job_id: str):
+    if not await run_in_threadpool(upload_jobs.cancel, job_id):
+        raise HTTPException(status_code=404, detail="Upload not found")
+    return {"status": "success", "message": "Upload cancelled"}
+
+
+@router.post("/uploads/{job_id}/pause")
+async def pause_upload(job_id: str):
+    if not document_service.pause_upload(job_id):
+        raise HTTPException(status_code=404, detail="Upload not found")
+    return {"status": "success", "message": "Upload pausing"}
+
+
+@router.post("/uploads/{job_id}/resume")
+async def resume_upload(job_id: str):
+    error = document_service.resume_upload(job_id)
+    if error:
+        raise HTTPException(status_code=404 if error == "Upload not found" else 409, detail=error)
+    return {"status": "success", "message": "Upload resumed"}
 
 
 @router.get("/upload-sources")
@@ -42,20 +70,20 @@ async def get_document_chunks(doc_id: int):
 @router.post("/chunks/{chunk_id}/tags")
 async def regenerate_chunk_tags(chunk_id: int):
     try:
-        metadata_text = await run_in_threadpool(chunk_service.regenerate_chunk_metadata, chunk_id)
+        chunk = await run_in_threadpool(chunk_service.regenerate_chunk_metadata, chunk_id)
     except chunk_service.GenerationFailed:
         raise HTTPException(status_code=502, detail="Tag generation failed")
-    if metadata_text is None:
+    if chunk is None:
         raise HTTPException(status_code=404, detail="Chunk not found")
-    return {"chunk_id": chunk_id, "metadata_text": metadata_text}
+    return {"chunk": chunk}
 
 
 @router.post("/chunks/{chunk_id}/previous-summary")
 async def regenerate_previous_summary(chunk_id: int):
     try:
-        previous_summary_text = await run_in_threadpool(chunk_service.regenerate_previous_summary, chunk_id)
+        chunk = await run_in_threadpool(chunk_service.regenerate_previous_summary, chunk_id)
     except chunk_service.GenerationFailed:
         raise HTTPException(status_code=502, detail="Summary generation failed")
-    if previous_summary_text is None:
+    if chunk is None:
         raise HTTPException(status_code=404, detail="Chunk not found or has no previous chunk")
-    return {"chunk_id": chunk_id, "previous_summary_text": previous_summary_text}
+    return {"chunk": chunk}

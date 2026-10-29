@@ -20,9 +20,9 @@ async def get_chats_endpoint():
     return {"chats": await run_in_threadpool(get_all_chats)}
 
 
-@router.get("/chats/{session_id}")
+@router.get("/chats/{session_id}", response_model=NewChatResponse)
 async def get_chat_history_endpoint(session_id: str):
-    return {"history": await run_in_threadpool(get_full_chat_history, session_id)}
+    return NewChatResponse(session_id=session_id, history=await run_in_threadpool(get_full_chat_history, session_id))
 
 
 @router.delete("/chats/{session_id}")

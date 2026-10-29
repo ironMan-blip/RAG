@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, FileText, Database as DatabaseIcon, Trash2, AlertTriangle, Upload, LayoutList, Search, ChevronRight, ChevronDown, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, FileText, Trash2, AlertTriangle, Upload, LayoutList, Search, ChevronRight, RefreshCw, X, Inbox, Pause, Play } from 'lucide-react';
 import { API_BASE } from './api';
 
-export default function DatabaseExplorer({ onClose }) {
+export default function DatabaseExplorer() {
+  const navigate = useNavigate();
   const [documents, setDocuments] = useState([]);
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [search, setSearch] = useState('');
@@ -16,10 +18,20 @@ export default function DatabaseExplorer({ onClose }) {
   const [documentToDelete, setDocumentToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState(null);
 
   const [uploadSources, setUploadSources] = useState([]);
   const uploadInputRef = useRef(null);
   const uploadSourceRef = useRef(null);
+
+  // Background processing jobs from the backend; failed ones linger until dismissed here
+  const [uploads, setUploads] = useState([]);
+  const [dismissedUploadIds, setDismissedUploadIds] = useState(new Set());
+  const runningUploadsRef = useRef(0);
+  // Server unreachable: its uploads are paused and resume from saved progress when it restarts
+  const [serverDown, setServerDown] = useState(false);
+  const isProcessing = uploads.some(u => !u.error);
+  const visibleUploads = uploads.filter(u => !dismissedUploadIds.has(u.id));
 
   const query = search.trim();
 
@@ -29,6 +41,55 @@ export default function DatabaseExplorer({ onClose }) {
       .then(data => setUploadSources(data.sources || []))
       .catch(err => console.error("Failed to fetch upload sources", err));
   }, []);
+
+  const fetchUploads = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/uploads`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const list = data.uploads || [];
+      const running = list.filter(u => !u.error).length;
+      // A job left the running set, so its document is now in (or failed out of) the list
+      if (running < runningUploadsRef.current) fetchDocuments();
+      runningUploadsRef.current = running;
+      setUploads(list);
+      setServerDown(false);
+    } catch (error) {
+      console.error("Failed to fetch uploads", error);
+      setServerDown(true);
+    }
+  };
+
+  const cancelUpload = async (u) => {
+    try {
+      const res = await fetch(`${API_BASE}/uploads/${u.id}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 404) setError(`Couldn't stop the upload of ${u.filename}.`);
+    } catch (error) {
+      console.error("Failed to cancel upload", error);
+      setError(`Couldn't stop the upload of ${u.filename}.`);
+    }
+    await fetchUploads();
+  };
+
+  const setUploadPaused = async (u, pause) => {
+    try {
+      const res = await fetch(`${API_BASE}/uploads/${u.id}/${pause ? 'pause' : 'resume'}`, { method: "POST" });
+      if (!res.ok) setError(`Couldn't ${pause ? 'pause' : 'resume'} the upload of ${u.filename}.`);
+    } catch (error) {
+      console.error("Failed to change upload state", error);
+      setError(`Couldn't ${pause ? 'pause' : 'resume'} the upload of ${u.filename}.`);
+    }
+    await fetchUploads();
+  };
+
+  useEffect(() => { fetchUploads(); }, []);
+
+  // Poll only while something is processing
+  useEffect(() => {
+    if (!isProcessing) return;
+    const timer = setInterval(fetchUploads, 1000);
+    return () => clearInterval(timer);
+  }, [isProcessing]);
 
   // Backend filters by name; debounce so typing doesn't fire a request per key
   useEffect(() => {
@@ -65,8 +126,8 @@ export default function DatabaseExplorer({ onClose }) {
     }
   };
 
-  // kind: 'tags' or 'previous-summary'; the response field replaces the same field on the chunk
-  const regenerate = async (docId, chunkId, kind, field) => {
+  // kind: 'tags' or 'previous-summary'; the backend returns the whole updated chunk
+  const regenerate = async (docId, chunkId, kind) => {
     const key = `${chunkId}:${kind}`;
     setRegeneratingChunkIds(prev => new Set(prev).add(key));
     try {
@@ -75,11 +136,11 @@ export default function DatabaseExplorer({ onClose }) {
       const data = await res.json();
       setChunksByDoc(prev => Array.isArray(prev[docId]) ? {
         ...prev,
-        [docId]: prev[docId].map(c => c.chunk_id === chunkId ? { ...c, [field]: data[field] } : c)
+        [docId]: prev[docId].map(c => c.chunk_id === chunkId ? data.chunk : c)
       } : prev);
     } catch (error) {
       console.error(`Failed to regenerate ${kind}`, error);
-      alert(`Failed to regenerate ${kind.replace('-', ' ')}.`);
+      setError(`Couldn't regenerate the ${kind === 'tags' ? 'tags' : 'summary'}. Try again.`);
     } finally {
       setRegeneratingChunkIds(prev => {
         const next = new Set(prev);
@@ -90,25 +151,8 @@ export default function DatabaseExplorer({ onClose }) {
   };
 
   const regenerateButton = (isRegenerating, onClick, label) => (
-    <button
-      onClick={onClick}
-      disabled={isRegenerating}
-      title={label}
-      aria-label={label}
-      style={{
-        position: 'absolute',
-        top: '6px',
-        right: '6px',
-        display: 'flex',
-        padding: '5px',
-        background: '#fff',
-        border: '1px solid #cbd5e1',
-        borderRadius: '6px',
-        cursor: isRegenerating ? 'not-allowed' : 'pointer',
-        opacity: isRegenerating ? 0.6 : 1
-      }}
-    >
-      <RefreshCw size={14} color="#475569" style={isRegenerating ? { animation: 'spin 1s linear infinite' } : undefined} />
+    <button className="icon-btn" onClick={onClick} disabled={isRegenerating} title={label} aria-label={label}>
+      <RefreshCw size={14} className={isRegenerating ? 'spinning' : undefined} />
     </button>
   );
 
@@ -130,10 +174,6 @@ export default function DatabaseExplorer({ onClose }) {
     return fetchDocuments();
   };
 
-  const handleDeleteClick = (doc) => {
-    setDocumentToDelete(doc);
-  };
-
   const executeDelete = async () => {
     if (!documentToDelete) return;
     setIsDeleting(true);
@@ -143,11 +183,11 @@ export default function DatabaseExplorer({ onClose }) {
         setDocumentToDelete(null);
         await refresh();
       } else {
-        alert("Failed to delete document.");
+        setError(`Couldn't delete ${documentToDelete.filename}. Try again.`);
       }
     } catch (error) {
       console.error("Failed to delete document", error);
-      alert("Error deleting document.");
+      setError("Couldn't reach the server to delete the document.");
     } finally {
       setIsDeleting(false);
     }
@@ -155,343 +195,264 @@ export default function DatabaseExplorer({ onClose }) {
 
   const handleFileUpload = async (event) => {
     const source = uploadSourceRef.current;
-    const file = event.target.files[0];
-    if (!file) return;
+    const files = [...event.target.files];
+    if (!files.length) return;
 
     setIsUploading(true);
+    setError(null);
+    const errors = [];
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (source) formData.append('source', source);
-      
-      const res = await fetch(`${API_BASE}/upload`, {
-        method: 'POST',
-        body: formData,
-      });
+      // One request per file; the backend queues each as its own upload job
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (source) formData.append('source', source);
 
-      if (res.ok) {
-        await refresh();
-      } else {
-        alert("Failed to upload document.");
+        const res = await fetch(`${API_BASE}/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!res.ok) {
+          // Backend explains rejections (size limit, unknown source); validation errors come as a list
+          const { detail } = await res.json().catch(() => ({}));
+          errors.push(typeof detail === 'string' ? detail : `Couldn't upload ${file.name}. Check the file type and try again.`);
+        }
+        await fetchUploads();
       }
     } catch (error) {
       console.error("Failed to upload document", error);
-      alert("Error uploading document.");
+      errors.push("Couldn't reach the server to upload the document.");
     } finally {
+      if (errors.length) setError(errors.join(' '));
       setIsUploading(false);
       if (uploadInputRef.current) uploadInputRef.current.value = "";
     }
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100vh',
-      backgroundColor: '#f1f5f9',
-      padding: '20px',
-      boxSizing: 'border-box'
-    }}>
-      <div style={{
-        backgroundColor: '#fff',
-        borderRadius: '12px',
-        width: '100%',
-        maxWidth: '1200px',
-        margin: '0 auto',
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
-        overflow: 'hidden'
-      }}>
-        {/* Header */}
-        <div style={{
-          padding: '20px',
-          borderBottom: '1px solid #e2e8f0',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          backgroundColor: '#fff',
-          zIndex: 10
-        }}>
-          <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.25rem' }}>
-            <DatabaseIcon size={24} color="#111111" />
-            Library
-          </h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <input
-              type="file"
-              ref={uploadInputRef}
-              style={{ display: 'none' }}
-              onChange={handleFileUpload}
-            />
-            {uploadSources.map(src => (
-              <button
-                key={src.value}
-                onClick={() => { uploadSourceRef.current = src.value; uploadInputRef.current?.click(); }}
-                disabled={isUploading}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '8px 12px',
-                  backgroundColor: src.color,
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: isUploading ? 'not-allowed' : 'pointer',
-                  opacity: isUploading ? 0.7 : 1,
-                  fontSize: '0.875rem'
-                }}
-              >
-                <Upload size={16} />
-                {isUploading ? 'Uploading...' : `Upload ${src.label} File`}
-              </button>
-            ))}
-            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '5px', marginLeft: '10px' }}>
-              <X size={24} color="#64748b" />
+    <div className="explorer">
+      <header className="explorer-header">
+        <button className="icon-btn" onClick={() => navigate('/')} aria-label="Back to chat" title="Back to chat">
+          <ArrowLeft size={18} />
+        </button>
+        <h1>Library</h1>
+        {!loadingDocs && (
+          <span className="explorer-count">{documents.length} {documents.length === 1 ? 'document' : 'documents'}</span>
+        )}
+        <div className="explorer-actions">
+          <input type="file" multiple ref={uploadInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
+          {uploadSources.map(src => (
+            <button
+              key={src.value}
+              className="btn"
+              onClick={() => { uploadSourceRef.current = src.value; uploadInputRef.current?.click(); }}
+              disabled={isUploading}
+            >
+              <Upload size={15} />
+              <span className="source-dot" style={{ background: src.color }} aria-hidden="true" />
+              {`Upload ${src.label}`}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <div className="explorer-body">
+        <label className="search-field">
+          <Search size={16} />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search documents by name"
+            aria-label="Search documents by name"
+          />
+        </label>
+
+        {error && (
+          <div className="alert" role="alert">
+            <AlertTriangle size={16} />
+            <span>{error}</span>
+            <button className="icon-btn" onClick={() => setError(null)} aria-label="Dismiss">
+              <X size={16} />
             </button>
           </div>
-        </div>
+        )}
 
-        {/* Search */}
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-          <label style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '8px 12px',
-            border: '1px solid #cbd5e1',
-            borderRadius: '6px',
-            backgroundColor: '#fff'
-          }}>
-            <Search size={16} color="#64748b" />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search documents by name..."
-              aria-label="Search documents by name"
-              style={{ flex: 1, border: 'none', outline: 'none', fontSize: '0.9rem', background: 'transparent' }}
-            />
-          </label>
-        </div>
-
-        {/* Document List */}
-        <div style={{ flex: 1, padding: '20px', overflowY: 'auto', backgroundColor: '#fff' }}>
-          {loadingDocs ? (
-            <p style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>Loading database records...</p>
-          ) : documents.length === 0 ? (
-            <p style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>
-              {query ? `No documents match "${query}".` : 'No documents found in the database.'}
-            </p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {documents.map(doc => {
-                const isExpanded = expandedDocId === doc.id;
-                const chunks = chunksByDoc[doc.id];
-                return (
-                  <div key={doc.id} style={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                        padding: '15px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        backgroundColor: isExpanded ? '#f8fafc' : '#fff'
-                      }}
-                    >
-                      <button
-                        onClick={() => toggleDocument(doc.id)}
-                        aria-expanded={isExpanded}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          flex: 1,
-                          background: 'none',
-                          border: 'none',
-                          padding: 0,
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                          font: 'inherit'
-                        }}
-                      >
-                        {isExpanded ? <ChevronDown size={18} color="#64748b" /> : <ChevronRight size={18} color="#64748b" />}
-                        <FileText size={20} color="#111111" style={{ margin: '0 10px 0 6px' }} />
-                        <div>
-                          <div style={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '6px' }}>{doc.filename}</div>
-                          <div style={{
-                            display: 'inline-block',
-                            fontSize: '0.7rem',
-                            fontWeight: '600',
-                            padding: '2px 8px',
-                            borderRadius: '12px',
-                            backgroundColor: doc.tag_bg_color || '#e2e8f0',
-                            color: doc.tag_text_color || '#475569'
-                          }}>
-                            {doc.tag_label}
+        <div className="explorer-list">
+          {visibleUploads.map(u => (
+              <article key={u.id} className="doc-card upload-card">
+                <div className="doc-row">
+                  <div className="doc-toggle">
+                    <span className={`doc-icon ${u.error ? 'failed' : ''}`}>
+                      {u.error ? <AlertTriangle size={18} /> : serverDown || u.paused ? <Pause size={18} /> : <RefreshCw size={18} className="spinning" />}
+                    </span>
+                    <span style={{ minWidth: 0, flex: 1 }}>
+                      <div className="doc-name" title={u.filename}>{u.filename}</div>
+                      {u.error ? (
+                        <div className="upload-status failed">{u.error}</div>
+                      ) : (
+                        <>
+                          <div className="upload-status">
+                            <span>
+                              <span className="source-dot" style={{ background: u.color }} aria-hidden="true" />
+                              {serverDown ? 'Paused, waiting for the server' : u.status_text}
+                            </span>
+                            <span>{serverDown ? '' : u.eta_text}</span>
                           </div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClick(doc)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: '5px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#ef4444'
-                        }}
-                        title="Delete Document"
-                      >
-                        <Trash2 size={20} />
-                      </button>
-                    </div>
+                          <div
+                            className={`upload-progress ${serverDown || u.paused ? 'paused' : ''}`}
+                            role="progressbar"
+                            aria-label={`Processing ${u.filename}`}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={u.percent ?? undefined}
+                          >
+                            <span className={u.percent == null ? 'indeterminate' : undefined} style={u.percent == null ? undefined : { width: `${u.percent}%` }} />
+                          </div>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  {u.error && (
+                    <button
+                      className="icon-btn"
+                      onClick={() => setDismissedUploadIds(prev => new Set(prev).add(u.id))}
+                      aria-label={`Dismiss ${u.filename}`}
+                      title="Dismiss"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                  {!u.error && !serverDown && (
+                    <button
+                      className="icon-btn"
+                      onClick={() => setUploadPaused(u, !u.paused)}
+                      disabled={u.paused && !u.stopped}
+                      aria-label={`${u.paused ? 'Resume' : 'Pause'} upload of ${u.filename}`}
+                      title={u.paused ? 'Resume upload' : 'Pause upload'}
+                    >
+                      {u.paused ? <Play size={16} /> : <Pause size={16} />}
+                    </button>
+                  )}
+                  {!u.error && !serverDown && (
+                    <button
+                      className="icon-btn"
+                      onClick={() => cancelUpload(u)}
+                      aria-label={`Stop and delete upload of ${u.filename}`}
+                      title="Stop and delete upload"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
+              </article>
+          ))}
+          {loadingDocs ? (
+            <div aria-label="Loading documents" role="status">
+              {[0, 1, 2].map(i => <div key={i} className="skeleton" style={{ marginBottom: 8 }} />)}
+            </div>
+          ) : documents.length === 0 ? (
+            visibleUploads.length > 0 && !query ? null : <div className="empty-state">
+              <Inbox size={32} />
+              {query ? (
+                <><strong>No matches</strong>No documents match "{query}".</>
+              ) : (
+                <><strong>No documents yet</strong>Upload a file to make it searchable in chat.</>
+              )}
+            </div>
+          ) : documents.map(doc => {
+            const isExpanded = expandedDocId === doc.id;
+            const chunks = chunksByDoc[doc.id];
+            return (
+              <article key={doc.id} className={`doc-card ${isExpanded ? 'expanded' : ''}`}>
+                <div className="doc-row">
+                  <button className="doc-toggle" onClick={() => toggleDocument(doc.id)} aria-expanded={isExpanded}>
+                    <ChevronRight size={16} />
+                    <span className="doc-icon"><FileText size={18} /></span>
+                    <span style={{ minWidth: 0 }}>
+                      <div className="doc-name" title={doc.filename}>{doc.filename}</div>
+                      <span className="tag" style={{ background: doc.tag_bg_color, color: doc.tag_text_color }}>
+                        {doc.tag_label}
+                      </span>
+                    </span>
+                  </button>
+                  <button className="icon-btn danger" onClick={() => setDocumentToDelete(doc)} title="Delete document" aria-label={`Delete ${doc.filename}`}>
+                    <Trash2 size={17} />
+                  </button>
+                </div>
 
-                    {isExpanded && (
-                      <div style={{ padding: '12px 15px 15px 44px', borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
-                        <pre style={{ margin: '0 0 10px', fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: '#f1f5f9', padding: '10px', borderRadius: '6px' }}>
-                          {doc.metadata_text}
-                        </pre>
-                        {chunks == null ? (
-                          <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>Loading chunks...</p>
-                        ) : chunks === 'error' ? (
-                          <p style={{ margin: 0, color: '#ef4444', fontSize: '0.875rem' }}>Failed to load chunks.</p>
-                        ) : chunks.length === 0 ? (
-                          <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>This document has no chunks.</p>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            {chunks.map(chunk => {
-                              const isChunkExpanded = expandedChunkId === chunk.chunk_id;
-                              const isRegeneratingTags = regeneratingChunkIds.has(`${chunk.chunk_id}:tags`);
-                              const isRegeneratingSummary = regeneratingChunkIds.has(`${chunk.chunk_id}:previous-summary`);
-                              return (
-                                <div key={chunk.chunk_id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', backgroundColor: '#fff', overflow: 'hidden' }}>
-                                  <button
-                                    onClick={() => setExpandedChunkId(isChunkExpanded ? null : chunk.chunk_id)}
-                                    aria-expanded={isChunkExpanded}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '8px',
-                                      width: '100%',
-                                      padding: '10px 12px',
-                                      background: 'none',
-                                      border: 'none',
-                                      textAlign: 'left',
-                                      cursor: 'pointer',
-                                      font: 'inherit',
-                                      fontSize: '0.875rem',
-                                      color: '#1e293b'
-                                    }}
-                                  >
-                                    {isChunkExpanded ? <ChevronDown size={16} color="#64748b" /> : <ChevronRight size={16} color="#64748b" />}
-                                    <LayoutList size={16} color="#111111" />
-                                    {chunk.label}
-                                  </button>
-                                  {isChunkExpanded && (
-                                    <div style={{ position: 'relative', borderTop: '1px solid #e2e8f0' }}>
-                                      {regenerateButton(isRegeneratingTags, () => regenerate(doc.id, chunk.chunk_id, 'tags', 'metadata_text'), 'Regenerate tags')}
-                                      <pre style={{ margin: 0, fontSize: '0.8rem', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: '#f1f5f9', padding: '10px 40px 10px 10px' }}>
-                                        {chunk.metadata_text}
-                                      </pre>
-                                      {chunk.previous_summary_text != null && (
-                                        <div style={{ position: 'relative', borderTop: '1px solid #e2e8f0' }}>
-                                          {regenerateButton(isRegeneratingSummary, () => regenerate(doc.id, chunk.chunk_id, 'previous-summary', 'previous_summary_text'), 'Regenerate summary')}
-                                          <pre style={{ margin: 0, fontSize: '0.8rem', color: '#475569', whiteSpace: 'pre-wrap', backgroundColor: '#fef9c3', padding: '10px 40px 10px 10px' }}>
-                                            {chunk.previous_summary_text}
-                                          </pre>
-                                        </div>
-                                      )}
-                                      <pre style={{ margin: 0, fontSize: '0.8rem', color: '#1e293b', whiteSpace: 'pre-wrap', padding: '10px', borderTop: '1px solid #e2e8f0', maxHeight: '400px', overflowY: 'auto' }}>
-                                        {chunk.chunk_text}
-                                      </pre>
+                {isExpanded && (
+                  <div className="doc-detail">
+                    <div className="section-label">Metadata</div>
+                    <pre className="meta-block">{doc.metadata_text}</pre>
+                    <div className="section-label">Chunks{Array.isArray(chunks) && ` (${chunks.length})`}</div>
+                    {chunks == null ? (
+                      <p className="detail-note">Loading chunks...</p>
+                    ) : chunks === 'error' ? (
+                      <p className="detail-note error">Couldn't load chunks. Collapse and expand to retry.</p>
+                    ) : chunks.length === 0 ? (
+                      <p className="detail-note">This document has no chunks.</p>
+                    ) : (
+                      <div className="chunk-list">
+                        {chunks.map(chunk => {
+                          const isChunkExpanded = expandedChunkId === chunk.chunk_id;
+                          const isRegeneratingTags = regeneratingChunkIds.has(`${chunk.chunk_id}:tags`);
+                          const isRegeneratingSummary = regeneratingChunkIds.has(`${chunk.chunk_id}:previous-summary`);
+                          return (
+                            <div key={chunk.chunk_id} className="chunk-card">
+                              <button
+                                className="chunk-toggle"
+                                onClick={() => setExpandedChunkId(isChunkExpanded ? null : chunk.chunk_id)}
+                                aria-expanded={isChunkExpanded}
+                              >
+                                <ChevronRight size={14} />
+                                <LayoutList size={15} />
+                                {chunk.label}
+                              </button>
+                              {isChunkExpanded && (
+                                <>
+                                  <div className="chunk-section meta">
+                                    {regenerateButton(isRegeneratingTags, () => regenerate(doc.id, chunk.chunk_id, 'tags'), 'Regenerate tags')}
+                                    <pre>{chunk.metadata_text}</pre>
+                                  </div>
+                                  {chunk.previous_summary_text != null && (
+                                    <div className="chunk-section summary">
+                                      {regenerateButton(isRegeneratingSummary, () => regenerate(doc.id, chunk.chunk_id, 'previous-summary'), 'Regenerate summary')}
+                                      <pre>{chunk.previous_summary_text}</pre>
                                     </div>
                                   )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                                  <div className="chunk-section text">
+                                    <pre>{chunk.chunk_text}</pre>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+              </article>
+            );
+          })}
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
       {documentToDelete && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.6)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1100
-        }}>
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '8px',
-            padding: '24px',
-            width: '90%',
-            maxWidth: '400px',
-            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#ef4444' }}>
-              <AlertTriangle size={28} />
-              <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>Delete Document</h3>
-            </div>
-            
-            <p style={{ margin: 0, color: '#475569', lineHeight: '1.5' }}>
-              Are you sure you want to delete <strong>{documentToDelete.filename}</strong>? 
-              This action cannot be undone and will remove all associated data, including its chunks.
+        <div className="modal-backdrop" onClick={() => !isDeleting && setDocumentToDelete(null)}>
+          <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-title" onClick={e => e.stopPropagation()}>
+            <div className="modal-icon"><AlertTriangle size={20} /></div>
+            <h2 id="delete-title">Delete document?</h2>
+            <p>
+              <strong>{documentToDelete.filename}</strong> and all its chunks will be removed from the library. This can't be undone.
             </p>
-            
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
-              <button 
-                onClick={() => setDocumentToDelete(null)}
-                disabled={isDeleting}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  backgroundColor: '#fff',
-                  color: '#475569',
-                  cursor: isDeleting ? 'not-allowed' : 'pointer',
-                  fontWeight: '500'
-                }}
-              >
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setDocumentToDelete(null)} disabled={isDeleting} autoFocus>
                 Cancel
               </button>
-              <button 
-                onClick={executeDelete}
-                disabled={isDeleting}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  border: 'none',
-                  backgroundColor: '#ef4444',
-                  color: '#fff',
-                  cursor: isDeleting ? 'not-allowed' : 'pointer',
-                  fontWeight: '500',
-                  opacity: isDeleting ? 0.7 : 1
-                }}
-              >
+              <button className="btn btn-danger" onClick={executeDelete} disabled={isDeleting}>
                 {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
