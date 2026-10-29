@@ -112,6 +112,7 @@ def _fill_missing(results: list, texts: list[str], generate, save):
 def _process_in_background(job: upload_jobs.UploadJob):
     def work():
         try:
+            upload_jobs.wait_turn(job)
             process_and_save_document(job.filename, job.content, job.content_type, SOURCE_IDS[job.source], job=job)
             upload_jobs.finish(job)
         except upload_jobs.Cancelled:
@@ -121,7 +122,10 @@ def _process_in_background(job: upload_jobs.UploadJob):
                 return  # the server is going down; the job's row stays and resumes on next start
             logger.exception("Upload of %s failed", job.filename)
             upload_jobs.finish(job, error="Processing failed. Check the file type, or the server log for details.")
+        finally:
+            upload_jobs.leave_queue(job)
 
+    upload_jobs.enqueue(job)
     job.worker = threading.Thread(target=work, daemon=True)
     job.worker.start()
 

@@ -17,6 +17,10 @@ _lock = threading.Lock()
 # Set on shutdown: a worker dying then is paused, not failed, so its row stays for resume
 stopping = False
 
+# Background jobs in upload order; only the first one is processed, the rest wait their turn
+_queue: list["UploadJob"] = []
+_turn = threading.Condition()
+
 
 class Cancelled(Exception):
     """Raised in a worker whose job was cancelled or paused, to stop it at the next saved result."""
@@ -122,6 +126,31 @@ def create(filename: str, source: str, content: bytes, content_type: Optional[st
     with _lock:
         _jobs[job.id] = job
     return job
+
+
+def enqueue(job: UploadJob):
+    """Put a job at the back of the queue; call before starting its worker so start order is queue order."""
+    with _turn:
+        _queue.append(job)
+        if _queue[0] is not job:
+            job.stage = "Queued"
+
+
+def wait_turn(job: UploadJob):
+    """Block until the job is first in the queue; raises Cancelled if it is cancelled or paused meanwhile."""
+    with _turn:
+        while _queue[0] is not job:
+            job.check_cancelled()
+            _turn.wait(timeout=0.5)  # also wakes to notice a pause or cancel, which don't notify
+    if job.stage == "Queued":
+        job.stage = "Extracting text"
+
+
+def leave_queue(job: UploadJob):
+    with _turn:
+        if job in _queue:
+            _queue.remove(job)
+        _turn.notify_all()
 
 
 def load_unfinished() -> list[UploadJob]:

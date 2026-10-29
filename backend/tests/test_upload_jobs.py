@@ -1,4 +1,5 @@
 """Run from backend/: python -m unittest tests.test_upload_jobs (no database needed)"""
+import threading
 import unittest
 from unittest import mock
 
@@ -73,6 +74,33 @@ class Cancel(unittest.TestCase):
             with self.assertRaises(upload_jobs.Cancelled):
                 job.set_summary(0, "s")
         self.assertNotIn("j1", upload_jobs._jobs)
+
+
+class Queue(unittest.TestCase):
+    def tearDown(self):
+        upload_jobs._queue.clear()
+
+    def test_next_job_waits_for_the_first_to_leave(self):
+        first, second = UploadJob("a.pdf", "library"), UploadJob("b.pdf", "library")
+        upload_jobs.enqueue(first)
+        upload_jobs.enqueue(second)
+        self.assertEqual((first.stage, second.stage), ("Extracting text", "Queued"))
+        waiter = threading.Thread(target=upload_jobs.wait_turn, args=(second,))
+        waiter.start()
+        waiter.join(0.2)
+        self.assertTrue(waiter.is_alive())
+        upload_jobs.leave_queue(first)
+        waiter.join(1)
+        self.assertFalse(waiter.is_alive())
+        self.assertEqual(second.stage, "Extracting text")
+
+    def test_job_paused_while_queued_stops_waiting(self):
+        first, second = UploadJob("a.pdf", "library"), UploadJob("b.pdf", "library")
+        upload_jobs.enqueue(first)
+        upload_jobs.enqueue(second)
+        second.paused = True
+        with self.assertRaises(upload_jobs.Cancelled):
+            upload_jobs.wait_turn(second)
 
 
 class Pause(unittest.TestCase):
