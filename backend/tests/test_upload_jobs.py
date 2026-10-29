@@ -73,3 +73,20 @@ class Cancel(unittest.TestCase):
             with self.assertRaises(upload_jobs.Cancelled):
                 job.set_summary(0, "s")
         self.assertNotIn("j1", upload_jobs._jobs)
+
+
+class Pause(unittest.TestCase):
+    def test_paused_job_stops_at_next_save_and_resumes(self):
+        job = UploadJob("a.pdf", "library", id="p1", chunks=[{"text": "x"}], tags=[None], summaries=[None])
+        upload_jobs._jobs["p1"] = job
+        try:
+            self.assertTrue(document_service.pause_upload("p1"))
+            with self.assertRaises(upload_jobs.Cancelled):
+                job.set_summary(0, "s")
+            self.assertTrue(job.to_dict()["stopped"])
+            with mock.patch.object(document_service, "_process_in_background") as start:
+                self.assertIsNone(document_service.resume_upload("p1"))
+            start.assert_called_once_with(job)
+            self.assertFalse(job.paused)
+        finally:
+            upload_jobs._jobs.pop("p1", None)

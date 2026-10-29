@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Trash2, AlertTriangle, Upload, LayoutList, Search, ChevronRight, RefreshCw, X, Inbox, Pause } from 'lucide-react';
+import { ArrowLeft, FileText, Trash2, AlertTriangle, Upload, LayoutList, Search, ChevronRight, RefreshCw, X, Inbox, Pause, Play } from 'lucide-react';
 import './App.css';
 import { API_BASE } from './api';
 
@@ -74,6 +74,17 @@ export default function DatabaseExplorer() {
     } catch (error) {
       console.error("Failed to cancel upload", error);
       setError(`Couldn't stop the upload of ${u.filename}.`);
+    }
+    await fetchUploads();
+  };
+
+  const setUploadPaused = async (u, pause) => {
+    try {
+      const res = await fetch(`${API_BASE}/uploads/${u.id}/${pause ? 'pause' : 'resume'}`, { method: "POST" });
+      if (!res.ok) setError(`Couldn't ${pause ? 'pause' : 'resume'} the upload of ${u.filename}.`);
+    } catch (error) {
+      console.error("Failed to change upload state", error);
+      setError(`Couldn't ${pause ? 'pause' : 'resume'} the upload of ${u.filename}.`);
     }
     await fetchUploads();
   };
@@ -277,7 +288,7 @@ export default function DatabaseExplorer() {
                 <div className="doc-row">
                   <div className="doc-toggle">
                     <span className={`doc-icon ${u.error ? 'failed' : ''}`}>
-                      {u.error ? <AlertTriangle size={18} /> : serverDown ? <Pause size={18} /> : <RefreshCw size={18} className="spinning" />}
+                      {u.error ? <AlertTriangle size={18} /> : serverDown || u.paused ? <Pause size={18} /> : <RefreshCw size={18} className="spinning" />}
                     </span>
                     <span style={{ minWidth: 0, flex: 1 }}>
                       <div className="doc-name" title={u.filename}>{u.filename}</div>
@@ -288,12 +299,12 @@ export default function DatabaseExplorer() {
                           <div className="upload-status">
                             <span>
                               {src && <span className="source-dot" style={{ background: src.color }} aria-hidden="true" />}
-                              {serverDown ? 'Paused, waiting for the server' : u.stage}{u.percent != null && ` · ${u.percent}%`}
+                              {serverDown ? 'Paused, waiting for the server' : u.stopped ? 'Paused' : u.paused ? 'Pausing...' : u.stage}{u.percent != null && ` · ${u.percent}%`}
                             </span>
-                            <span>{serverDown ? '' : formatEta(u)}</span>
+                            <span>{serverDown || u.paused ? '' : formatEta(u)}</span>
                           </div>
                           <div
-                            className={`upload-progress ${serverDown ? 'paused' : ''}`}
+                            className={`upload-progress ${serverDown || u.paused ? 'paused' : ''}`}
                             role="progressbar"
                             aria-label={`Processing ${u.filename}`}
                             aria-valuemin={0}
@@ -314,6 +325,17 @@ export default function DatabaseExplorer() {
                       title="Dismiss"
                     >
                       <X size={16} />
+                    </button>
+                  )}
+                  {!u.error && !serverDown && (
+                    <button
+                      className="icon-btn"
+                      onClick={() => setUploadPaused(u, !u.paused)}
+                      disabled={u.paused && !u.stopped}
+                      aria-label={`${u.paused ? 'Resume' : 'Pause'} upload of ${u.filename}`}
+                      title={u.paused ? 'Resume upload' : 'Pause upload'}
+                    >
+                      {u.paused ? <Play size={16} /> : <Pause size={16} />}
                     </button>
                   )}
                   {!u.error && !serverDown && (

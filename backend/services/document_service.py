@@ -115,14 +115,15 @@ def _process_in_background(job: upload_jobs.UploadJob):
             process_and_save_document(job.filename, job.content, job.content_type, SOURCE_IDS[job.source], job=job)
             upload_jobs.finish(job)
         except upload_jobs.Cancelled:
-            logger.info("Upload of %s cancelled", job.filename)
+            logger.info("Upload of %s %s", job.filename, "paused" if job.paused else "cancelled")
         except Exception:
             if upload_jobs.stopping:
                 return  # the server is going down; the job's row stays and resumes on next start
             logger.exception("Upload of %s failed", job.filename)
             upload_jobs.finish(job, error="Processing failed. Check the file type, or the server log for details.")
 
-    threading.Thread(target=work, daemon=True).start()
+    job.worker = threading.Thread(target=work, daemon=True)
+    job.worker.start()
 
 
 def start_upload(file_name: str, content: bytes, content_type: str, source: str) -> dict:
@@ -130,6 +131,27 @@ def start_upload(file_name: str, content: bytes, content_type: str, source: str)
     job = upload_jobs.create(file_name, source, content, content_type)
     _process_in_background(job)
     return job.to_dict()
+
+
+def pause_upload(job_id: str) -> bool:
+    """Stop a job's worker at its next saved result; its progress is kept for resume_upload."""
+    job = upload_jobs.get(job_id)
+    if job is None or job.error:
+        return False
+    job.paused = True
+    return True
+
+
+def resume_upload(job_id: str) -> Optional[str]:
+    """Continue a paused job from its saved progress. Returns an error message, or None on success."""
+    job = upload_jobs.get(job_id)
+    if job is None or job.error:
+        return "Upload not found"
+    if job.worker and job.worker.is_alive():
+        return "Upload is still pausing" if job.paused else None
+    job.paused = False
+    _process_in_background(job)
+    return None
 
 
 def resume_uploads():

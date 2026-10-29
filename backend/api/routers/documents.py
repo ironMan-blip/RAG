@@ -25,6 +25,21 @@ async def cancel_upload(job_id: str):
     return {"status": "success", "message": "Upload cancelled"}
 
 
+@router.post("/uploads/{job_id}/pause")
+async def pause_upload(job_id: str):
+    if not document_service.pause_upload(job_id):
+        raise HTTPException(status_code=404, detail="Upload not found")
+    return {"status": "success", "message": "Upload pausing"}
+
+
+@router.post("/uploads/{job_id}/resume")
+async def resume_upload(job_id: str):
+    error = document_service.resume_upload(job_id)
+    if error:
+        raise HTTPException(status_code=404 if error == "Upload not found" else 409, detail=error)
+    return {"status": "success", "message": "Upload resumed"}
+
+
 @router.get("/upload-sources")
 async def get_upload_sources():
     return {"sources": document_service.get_upload_sources()}

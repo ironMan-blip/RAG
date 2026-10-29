@@ -19,7 +19,7 @@ stopping = False
 
 
 class Cancelled(Exception):
-    """Raised in a worker whose job was cancelled, to stop it at the next saved result."""
+    """Raised in a worker whose job was cancelled or paused, to stop it at the next saved result."""
 
 
 class UploadJob:
@@ -45,6 +45,8 @@ class UploadJob:
         self.error: Optional[str] = None
         self.failed_at: Optional[float] = None
         self.cancelled = False
+        self.paused = False
+        self.worker: Optional[threading.Thread] = None
         self._pace_start: Optional[tuple[float, int]] = None  # (time, done) when this process started working
 
     @property
@@ -63,7 +65,7 @@ class UploadJob:
                 + sum(s is not None for s in self.summaries))
 
     def check_cancelled(self):
-        if self.cancelled:
+        if self.cancelled or self.paused:
             raise Cancelled()
 
     def _update(self, sql: str, *params):
@@ -106,6 +108,9 @@ class UploadJob:
             "percent": round(100 * self.done / self.total) if self.total else None,
             "eta_seconds": eta,
             "error": self.error,
+            # Pausing until the worker reaches its next checkpoint, then paused
+            "paused": self.paused,
+            "stopped": self.paused and not (self.worker and self.worker.is_alive()),
         }
 
 
@@ -143,6 +148,11 @@ def finish(job: UploadJob, error: Optional[str] = None):
             _jobs.pop(job.id, None)
         else:
             job.error, job.failed_at = error, time.monotonic()
+
+
+def get(job_id: str) -> Optional[UploadJob]:
+    with _lock:
+        return _jobs.get(job_id)
 
 
 def cancel(job_id: str) -> bool:
