@@ -33,8 +33,7 @@ CREATE TABLE IF NOT EXISTS chunks (
 
 CREATE INDEX IF NOT EXISTS chunks_doc_id_idx ON chunks (doc_id);
 -- Approximate nearest-neighbour search for ORDER BY chunk_embedding <=> q LIMIT k; cosine ops to match
--- retrieval_service's <=> (cosine distance). Existing databases had an L2 index under the old name.
-DROP INDEX IF EXISTS chunks_embedding_idx;
+-- retrieval_service's <=> (cosine distance)
 CREATE INDEX IF NOT EXISTS chunks_embedding_cosine_idx ON chunks USING hnsw (chunk_embedding vector_cosine_ops);
 
 CREATE TABLE IF NOT EXISTS chats (
@@ -53,10 +52,6 @@ CREATE TABLE IF NOT EXISTS chat_history (
     timings JSONB, -- [{"step", "ms"}] per pipeline step, in order; for finding slow steps
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
--- Existing databases created before the prompt column
-ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS prompt TEXT;
-ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS timings JSONB;
 
 -- Uploads still processing: the file plus every result finished so far, so a restart resumes instead of
 -- starting over. A row is deleted when its document is saved (or processing fails).

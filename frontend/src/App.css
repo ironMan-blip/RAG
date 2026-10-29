@@ -2,7 +2,6 @@
 
 :root {
   --ink: #18181b;
-  --ink-hover: #3f3f46;
   --text: #27272a;
   --muted: #71717a;
   --faint: #a1a1aa;
@@ -31,10 +30,48 @@
   --z-modal: 40;
 }
 
-* {
+*, ::before, ::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  border: 0 solid;
+}
+
+html {
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1, h2 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+ul {
+  list-style: none;
+}
+
+svg {
+  display: block;
+  vertical-align: middle;
+}
+
+input, textarea {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  background-color: transparent;
+  border-radius: 0;
+}
+
+::placeholder {
+  opacity: 1;
+  color: color-mix(in oklab, currentcolor 50%, transparent);
+}
+
+textarea {
+  resize: vertical;
 }
 
 body {
@@ -54,7 +91,11 @@ body {
 
 button {
   font: inherit;
+  letter-spacing: inherit;
   color: inherit;
+  background-color: transparent;
+  border-radius: 0;
+  appearance: button;
   cursor: pointer;
 }
 
@@ -99,17 +140,6 @@ pre {
 
 .btn:disabled {
   opacity: 0.55;
-}
-
-.btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
 }
 
 .btn-danger {
@@ -1180,6 +1210,10 @@ kbd {
 
 .spinning {
   animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Modal */

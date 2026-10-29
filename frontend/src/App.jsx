@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { ArrowUp, Bot, Sparkles, Paperclip, X, Library, ChevronDown, ChevronRight, Check, Cpu, MessageSquarePlus, MessageSquare, Menu, Trash2, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import './App.css';
 import { API_BASE } from './api';
 
 // One segment per backend pipeline step, width proportional to its time

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileText, Trash2, AlertTriangle, Upload, LayoutList, Search, ChevronRight, RefreshCw, X, Inbox, Pause, Play } from 'lucide-react';
-import './App.css';
 import { API_BASE } from './api';
 
 export default function DatabaseExplorer() {
