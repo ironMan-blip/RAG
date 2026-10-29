@@ -18,6 +18,10 @@ _lock = threading.Lock()
 stopping = False
 
 
+class Cancelled(Exception):
+    """Raised in a worker whose job was cancelled, to stop it at the next saved result."""
+
+
 class UploadJob:
     """One document being processed and every result finished so far.
 
@@ -40,6 +44,7 @@ class UploadJob:
         self.stage = "Extracting text"
         self.error: Optional[str] = None
         self.failed_at: Optional[float] = None
+        self.cancelled = False
         self._pace_start: Optional[tuple[float, int]] = None  # (time, done) when this process started working
 
     @property
@@ -57,7 +62,12 @@ class UploadJob:
         return ((self.doc_metadata is not None) + sum(t is not None for t in self.tags)
                 + sum(s is not None for s in self.summaries))
 
+    def check_cancelled(self):
+        if self.cancelled:
+            raise Cancelled()
+
     def _update(self, sql: str, *params):
+        self.check_cancelled()
         if self.id is not None:
             with db_cursor() as cur:
                 cur.execute(f"UPDATE upload_jobs SET {sql} WHERE id = %s", (*params, self.id))
@@ -133,6 +143,18 @@ def finish(job: UploadJob, error: Optional[str] = None):
             _jobs.pop(job.id, None)
         else:
             job.error, job.failed_at = error, time.monotonic()
+
+
+def cancel(job_id: str) -> bool:
+    """Stop a job and delete its row and saved progress; its worker exits at its next checkpoint."""
+    with _lock:
+        job = _jobs.pop(job_id, None)
+    if job is None:
+        return False
+    job.cancelled = True
+    with db_cursor() as cur:
+        cur.execute("DELETE FROM upload_jobs WHERE id = %s", (job_id,))
+    return True
 
 
 def list_jobs() -> list[dict]:

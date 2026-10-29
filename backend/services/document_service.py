@@ -85,6 +85,7 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
     job.stage = "Embedding"
     embeddings, embedded_from = embed_chunks(chunks, summaries)
 
+    job.check_cancelled()
     job.stage = "Saving"
     with db_cursor() as cur:
         cur.execute(
@@ -113,6 +114,8 @@ def _process_in_background(job: upload_jobs.UploadJob):
         try:
             process_and_save_document(job.filename, job.content, job.content_type, SOURCE_IDS[job.source], job=job)
             upload_jobs.finish(job)
+        except upload_jobs.Cancelled:
+            logger.info("Upload of %s cancelled", job.filename)
         except Exception:
             if upload_jobs.stopping:
                 return  # the server is going down; the job's row stays and resumes on next start

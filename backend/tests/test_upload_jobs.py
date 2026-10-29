@@ -61,3 +61,15 @@ class Registry(unittest.TestCase):
         listed = {j["filename"]: j for j in upload_jobs.list_jobs()}
         self.assertNotIn("ok.pdf", listed)
         self.assertEqual(listed["bad.pdf"]["error"], "boom")
+
+
+class Cancel(unittest.TestCase):
+    def test_cancel_drops_job_and_stops_worker_at_next_save(self):
+        job = UploadJob("a.pdf", "library", id="j1", chunks=[{"text": "x"}], tags=[None], summaries=[None])
+        upload_jobs._jobs["j1"] = job
+        with mock.patch.object(upload_jobs, "db_cursor"):
+            self.assertTrue(upload_jobs.cancel("j1"))
+            self.assertFalse(upload_jobs.cancel("j1"))
+            with self.assertRaises(upload_jobs.Cancelled):
+                job.set_summary(0, "s")
+        self.assertNotIn("j1", upload_jobs._jobs)

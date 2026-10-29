@@ -67,6 +67,17 @@ export default function DatabaseExplorer() {
     }
   };
 
+  const cancelUpload = async (u) => {
+    try {
+      const res = await fetch(`${API_BASE}/uploads/${u.id}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 404) setError(`Couldn't stop the upload of ${u.filename}.`);
+    } catch (error) {
+      console.error("Failed to cancel upload", error);
+      setError(`Couldn't stop the upload of ${u.filename}.`);
+    }
+    await fetchUploads();
+  };
+
   useEffect(() => { fetchUploads(); }, []);
 
   // Poll only while something is processing
@@ -303,6 +314,16 @@ export default function DatabaseExplorer() {
                       title="Dismiss"
                     >
                       <X size={16} />
+                    </button>
+                  )}
+                  {!u.error && !serverDown && (
+                    <button
+                      className="icon-btn"
+                      onClick={() => cancelUpload(u)}
+                      aria-label={`Stop and delete upload of ${u.filename}`}
+                      title="Stop and delete upload"
+                    >
+                      <Trash2 size={16} />
                     </button>
                   )}
                 </div>

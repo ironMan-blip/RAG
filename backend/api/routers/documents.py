@@ -18,6 +18,13 @@ async def get_uploads():
     return {"uploads": upload_jobs.list_jobs()}
 
 
+@router.delete("/uploads/{job_id}")
+async def cancel_upload(job_id: str):
+    if not await run_in_threadpool(upload_jobs.cancel, job_id):
+        raise HTTPException(status_code=404, detail="Upload not found")
+    return {"status": "success", "message": "Upload cancelled"}
+
+
 @router.get("/upload-sources")
 async def get_upload_sources():
     return {"sources": document_service.get_upload_sources()}
