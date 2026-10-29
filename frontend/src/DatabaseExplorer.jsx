@@ -4,6 +4,9 @@ import { ArrowLeft, FileText, Trash2, AlertTriangle, Upload, LayoutList, Search,
 import './App.css';
 import { API_BASE } from './api';
 
+// Mirrors MAX_UPLOAD_BYTES in backend/api/routers/documents.py; the backend enforces it
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+
 function formatEta({ percent, eta_seconds }) {
   if (eta_seconds == null) return percent ? '' : 'Estimating time...';
   if (eta_seconds < 60) return `~${Math.max(eta_seconds, 1)}s left`;
@@ -204,6 +207,11 @@ export default function DatabaseExplorer() {
     const source = uploadSourceRef.current;
     const file = event.target.files[0];
     if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError(`${file.name} is larger than the 20 MB limit.`);
+      if (uploadInputRef.current) uploadInputRef.current.value = "";
+      return;
+    }
 
     setIsUploading(true);
     setError(null);
@@ -219,6 +227,8 @@ export default function DatabaseExplorer() {
 
       if (res.ok) {
         await fetchUploads();
+      } else if (res.status === 413) {
+        setError(`${file.name} is larger than the 20 MB limit.`);
       } else {
         setError(`Couldn't upload ${file.name}. Check the file type and try again.`);
       }
