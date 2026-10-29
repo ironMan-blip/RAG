@@ -7,4 +7,4 @@ It uses Jev (OpenRouter) to decide if the AI needs additional context or not.
 
 ![How the assistant works](architecture.png)
 
-Source: [`architecture.mmd`](architecture.mmd). Re-render with `npx @mermaid-js/mermaid-cli -i architecture.mmd -o architecture.png -b white -w 2000 -s 2`.
+Source: [`architecture.mmd`](architecture.mmd). Re-render with `npx @mermaid-js/mermaid-cli -i architecture.mmd -o architecture.png -b white --size 2000 -s 2`.
