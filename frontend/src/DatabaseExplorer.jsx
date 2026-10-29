@@ -4,15 +4,6 @@ import { ArrowLeft, FileText, Trash2, AlertTriangle, Upload, LayoutList, Search,
 import './App.css';
 import { API_BASE } from './api';
 
-// Mirrors MAX_UPLOAD_BYTES in backend/api/routers/documents.py; the backend enforces it
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-
-function formatEta({ percent, eta_seconds }) {
-  if (eta_seconds == null) return percent ? '' : 'Estimating time...';
-  if (eta_seconds < 60) return `~${Math.max(eta_seconds, 1)}s left`;
-  return `~${Math.round(eta_seconds / 60)} min left`;
-}
-
 export default function DatabaseExplorer() {
   const navigate = useNavigate();
   const [documents, setDocuments] = useState([]);
@@ -207,11 +198,6 @@ export default function DatabaseExplorer() {
     const source = uploadSourceRef.current;
     const file = event.target.files[0];
     if (!file) return;
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setError(`${file.name} is larger than the 20 MB limit.`);
-      if (uploadInputRef.current) uploadInputRef.current.value = "";
-      return;
-    }
 
     setIsUploading(true);
     setError(null);
@@ -227,10 +213,10 @@ export default function DatabaseExplorer() {
 
       if (res.ok) {
         await fetchUploads();
-      } else if (res.status === 413) {
-        setError(`${file.name} is larger than the 20 MB limit.`);
       } else {
-        setError(`Couldn't upload ${file.name}. Check the file type and try again.`);
+        // Backend explains rejections (size limit, unknown source); validation errors come as a list
+        const { detail } = await res.json().catch(() => ({}));
+        setError(typeof detail === 'string' ? detail : `Couldn't upload ${file.name}. Check the file type and try again.`);
       }
     } catch (error) {
       console.error("Failed to upload document", error);
@@ -291,9 +277,7 @@ export default function DatabaseExplorer() {
         )}
 
         <div className="explorer-list">
-          {visibleUploads.map(u => {
-            const src = uploadSources.find(s => s.value === u.source);
-            return (
+          {visibleUploads.map(u => (
               <article key={u.id} className="doc-card upload-card">
                 <div className="doc-row">
                   <div className="doc-toggle">
@@ -308,10 +292,10 @@ export default function DatabaseExplorer() {
                         <>
                           <div className="upload-status">
                             <span>
-                              {src && <span className="source-dot" style={{ background: src.color }} aria-hidden="true" />}
-                              {serverDown ? 'Paused, waiting for the server' : u.stopped ? 'Paused' : u.paused ? 'Pausing...' : u.stage}{u.percent != null && ` · ${u.percent}%`}
+                              <span className="source-dot" style={{ background: u.color }} aria-hidden="true" />
+                              {serverDown ? 'Paused, waiting for the server' : u.status_text}
                             </span>
-                            <span>{serverDown || u.paused ? '' : formatEta(u)}</span>
+                            <span>{serverDown ? '' : u.eta_text}</span>
                           </div>
                           <div
                             className={`upload-progress ${serverDown || u.paused ? 'paused' : ''}`}
@@ -360,8 +344,7 @@ export default function DatabaseExplorer() {
                   )}
                 </div>
               </article>
-            );
-          })}
+          ))}
           {loadingDocs ? (
             <div aria-label="Loading documents" role="status">
               {[0, 1, 2].map(i => <div key={i} className="skeleton" style={{ marginBottom: 8 }} />)}
@@ -386,7 +369,7 @@ export default function DatabaseExplorer() {
                     <span className="doc-icon"><FileText size={18} /></span>
                     <span style={{ minWidth: 0 }}>
                       <div className="doc-name" title={doc.filename}>{doc.filename}</div>
-                      <span className="tag" style={{ background: doc.tag_bg_color || '#f4f4f2', color: doc.tag_text_color || '#71717a' }}>
+                      <span className="tag" style={{ background: doc.tag_bg_color, color: doc.tag_text_color }}>
                         {doc.tag_label}
                       </span>
                     </span>

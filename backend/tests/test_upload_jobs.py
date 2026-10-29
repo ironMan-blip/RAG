@@ -24,7 +24,14 @@ class UploadJobProgress(unittest.TestCase):
             job.begin()
             job.set_tags(1, ["t"] * 10)
             d = job.to_dict()
-        self.assertEqual((d["percent"], d["eta_seconds"]), (50, 30))  # 10s per new unit, 3 units left
+        self.assertEqual((d["percent"], d["eta_text"]), (50, "~30s left"))  # 10s per new unit, 3 units left
+        self.assertEqual(d["status_text"], "Extracting text · 50%")
+
+    def test_paused_job_shows_no_eta(self):
+        job = resumed_tools_job()
+        job.paused = True
+        d = job.to_dict()
+        self.assertEqual((d["status_text"], d["eta_text"]), ("Paused · 33%", ""))
 
     def test_untracked_job_never_touches_database(self):
         job = UploadJob("a.pdf", "")

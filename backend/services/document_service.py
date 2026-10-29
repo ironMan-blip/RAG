@@ -37,6 +37,11 @@ def get_upload_sources() -> list[dict]:
     ]
 
 
+def list_uploads() -> list[dict]:
+    """Running and recently failed upload jobs, each with its source's accent color for the UI."""
+    return [{**u, "color": TAG_STYLES[SOURCE_IDS[u["source"]]][2]} for u in upload_jobs.list_jobs()]
+
+
 def _is_unchanged(cur, file_name: str, file_hash: str, source_id: str, session_id: Optional[str]) -> bool:
     cur.execute(
         """SELECT 1 FROM documents

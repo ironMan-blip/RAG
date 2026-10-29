@@ -104,17 +104,26 @@ class UploadJob:
             started, done_before = self._pace_start
             if self.done > done_before:
                 eta = round((time.monotonic() - started) / (self.done - done_before) * (self.total - self.done))
+        percent = round(100 * self.done / self.total) if self.total else None
+        # Pausing until the worker reaches its next checkpoint, then paused
+        stopped = self.paused and not (self.worker and self.worker.is_alive())
+        status = "Paused" if stopped else "Pausing..." if self.paused else self.stage
+        if self.paused:
+            eta_text = ""
+        elif eta is None:
+            eta_text = "" if percent else "Estimating time..."
+        else:
+            eta_text = f"~{max(eta, 1)}s left" if eta < 60 else f"~{round(eta / 60)} min left"
         return {
             "id": self.id,
             "filename": self.filename,
             "source": self.source,
-            "stage": self.stage,
-            "percent": round(100 * self.done / self.total) if self.total else None,
-            "eta_seconds": eta,
+            "percent": percent,
+            "status_text": status if percent is None else f"{status} · {percent}%",
+            "eta_text": eta_text,
             "error": self.error,
-            # Pausing until the worker reaches its next checkpoint, then paused
             "paused": self.paused,
-            "stopped": self.paused and not (self.worker and self.worker.is_alive()),
+            "stopped": stopped,
         }
 
 
