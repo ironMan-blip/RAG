@@ -7,6 +7,7 @@ from langsmith import traceable
 from core.config import settings
 from core.database import db_cursor
 from core.ml import embedder
+from core.timing import timed
 from services.document_service import get_document_names
 from services.tagging_service import generate_query_profile
 
@@ -63,15 +64,20 @@ _CONTEXT_SQL = """
 
 
 @traceable
-def get_database_context(query: str, attached_filename: str = None, session_id: str = None) -> str:
-    """Chunks for the query, narrowed by document metadata, then a cosine similarity cutoff."""
-    profile = generate_query_profile(query)
+def get_database_context(query: str, attached_filename: str = None, session_id: str = None, timings: list = None) -> str:
+    """Chunks for the query, narrowed by document metadata, then a cosine similarity cutoff.
+    Appends "profile", "embed" and "search" step times to `timings` when given."""
+    timings = timings if timings is not None else []
+    with timed(timings, "profile"):
+        profile = generate_query_profile(query)
     # An attached file is already the chosen document, so its metadata is not scored
     metadata = {} if attached_filename else {
         k: v.strip() for k in _PROFILE_FIELDS if isinstance(v := profile.get(k), str) and v.strip()
     }
+    with timed(timings, "embed"):
+        query_embedding = str(embedder.encode_query(query).tolist())
     params = {
-        "query": str(embedder.encode_query(query).tolist()),
+        "query": query_embedding,
         "profile": json.dumps(metadata),
         "filename": attached_filename,
         "session_id": session_id,
@@ -80,7 +86,7 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
     }
     scope = "d.filename = %(filename)s" if attached_filename else "d.session_id IS NULL OR d.session_id = %(session_id)s"
     try:
-        with db_cursor() as cur:
+        with timed(timings, "search"), db_cursor() as cur:
             cur.execute(_CONTEXT_SQL.format(scope=scope), params)
             rows = cur.fetchall()
     except Exception:

@@ -11,12 +11,12 @@ function TimingBar({ timings }) {
     <div className="timing" onClick={e => e.stopPropagation()}>
       <div className="timing-bar" role="img" aria-label={`Reply took ${total} ms`}>
         {timings.map((t, i) => (
-          <span key={i} className={`timing-seg seg-${i % 5}`} style={{ flexGrow: Math.max(t.ms, 1) }} title={`${t.step}: ${t.ms} ms`} />
+          <span key={i} className={`timing-seg seg-${i % 7}`} style={{ flexGrow: Math.max(t.ms, 1) }} title={`${t.step}: ${t.ms} ms`} />
         ))}
       </div>
       <div className="timing-legend">
         {timings.map((t, i) => (
-          <span key={i}><i className={`seg-${i % 5}`} />{t.step} {t.ms} ms</span>
+          <span key={i}><i className={`seg-${i % 7}`} />{t.step} {t.ms} ms</span>
         ))}
         <span className="timing-total">total {total} ms</span>
       </div>

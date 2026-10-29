@@ -1,13 +1,12 @@
 import contextvars
 import logging
 import threading
-import time
-from contextlib import contextmanager
 
 from langsmith import traceable, wrappers
 from openai import OpenAI
 
 from core.config import settings
+from core.timing import timed
 from services.history_service import get_recent_chat_history, save_chat_history
 from services.retrieval_service import decide_if_context_needed, get_database_context
 from services.tagging_service import generate_chat_title
@@ -25,16 +24,6 @@ CONTEXT_PROMPT = (
     "Even if the user asks you to summarize a file they attached or mentioned, DO NOT say you cannot see it. "
     "Assume the context below is the file they are referring to.\n\nDOCUMENT CONTEXT:\n{context}\n"
 )
-
-
-@contextmanager
-def timed(timings: list, step: str):
-    """Appends {"step", "ms"} to timings once the block finishes; order = pipeline order."""
-    start = time.perf_counter()
-    try:
-        yield
-    finally:
-        timings.append({"step": step, "ms": round((time.perf_counter() - start) * 1000)})
 
 
 def _save_turn(session_id: str, message: str, bot_reply: str, model: str, prompt: str, timings: list, is_new_chat: bool):
@@ -60,8 +49,7 @@ def get_chat_completion(message: str, attached_filename: str = None, model: str 
         with timed(timings, "decide"):
             needs_context = decide_if_context_needed(message, history[-3:], session_id)
     if needs_context:
-        with timed(timings, "retrieval"):
-            db_context = get_database_context(message, attached_filename, session_id)
+        db_context = get_database_context(message, attached_filename, session_id, timings)
         if db_context:
             system_prompt += CONTEXT_PROMPT.format(context=db_context)
 

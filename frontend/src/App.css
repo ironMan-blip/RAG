@@ -260,6 +260,8 @@ body {
 .seg-2 { background: #d97706; }
 .seg-3 { background: #9333ea; }
 .seg-4 { background: #dc2626; }
+.seg-5 { background: #0891b2; }
+.seg-6 { background: #db2777; }
 
 .user-message {
   background-color: var(--user-msg-bg);
