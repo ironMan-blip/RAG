@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { X, FileText, Database as DatabaseIcon, Trash2, AlertTriangle, Upload, LayoutList, Search, ChevronRight, ChevronDown, RefreshCw } from 'lucide-react';
 import { API_BASE } from './api';
 
-export default function DatabaseExplorer({ onClose }) {
+export default function DatabaseExplorer() {
+  const navigate = useNavigate();
   const [documents, setDocuments] = useState([]);
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [search, setSearch] = useState('');
@@ -130,10 +132,6 @@ export default function DatabaseExplorer({ onClose }) {
     return fetchDocuments();
   };
 
-  const handleDeleteClick = (doc) => {
-    setDocumentToDelete(doc);
-  };
-
   const executeDelete = async () => {
     if (!documentToDelete) return;
     setIsDeleting(true);
@@ -248,7 +246,7 @@ export default function DatabaseExplorer({ onClose }) {
                 {isUploading ? 'Uploading...' : `Upload ${src.label} File`}
               </button>
             ))}
-            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '5px', marginLeft: '10px' }}>
+            <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '5px', marginLeft: '10px' }}>
               <X size={24} color="#64748b" />
             </button>
           </div>
@@ -338,7 +336,7 @@ export default function DatabaseExplorer({ onClose }) {
                         </div>
                       </button>
                       <button
-                        onClick={() => handleDeleteClick(doc)}
+                        onClick={() => setDocumentToDelete(doc)}
                         style={{
                           background: 'none',
                           border: 'none',

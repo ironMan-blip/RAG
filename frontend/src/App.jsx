@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Library, ChevronDown, Check, Cpu, MessageSquarePlus, Menu, Trash2, Clock, Database } from 'lucide-react';
+import { Send, Bot, User, MoreHorizontal, Sparkles, Paperclip, X, Library, ChevronDown, Check, Cpu, MessageSquarePlus, Menu, Trash2, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import './App.css';
 import { API_BASE } from './api';
@@ -316,8 +316,6 @@ function App() {
             </div>
           )}
         </main>
-
-        {/* Admin modal removed in favor of separate page */}
 
         <footer className="chat-input-area">
           {selectedFile && (
