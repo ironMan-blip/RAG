@@ -38,6 +38,9 @@ class ScriptedChain:
             out.append(errs.pop(0) if errs else {"text": i["text"]})
         return out
 
+    def batch_as_completed(self, inputs, config=None, return_exceptions=False):
+        return enumerate(self.batch(inputs, config, return_exceptions))
+
 
 @mock.patch.object(tagging_service.time, "sleep")
 class PersistentRun(unittest.TestCase):
@@ -74,6 +77,13 @@ class PersistentRun(unittest.TestCase):
         with self.assertRaises(openai.AuthenticationError):
             _run(chain, ["a"], persist=True)
         self.assertEqual(len(chain.configs), 1)
+
+    def test_on_success_sees_each_finished_text_once_with_its_index(self, sleep):
+        chain = ScriptedChain({"b": [openai.APIConnectionError(request=REQUEST)] * 2})
+        on_success = mock.Mock()
+        _run(chain, ["a", "b", "c"], persist=True, on_success=on_success)
+        self.assertEqual(sorted(c.args for c in on_success.call_args_list),
+                         [(0, {"text": "a"}), (1, {"text": "b"}), (2, {"text": "c"})])
 
     def test_single_shot_without_persist(self, sleep):
         chain = ScriptedChain({"a": [OutputParserException("bad json")]})

@@ -1,8 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Trash2, AlertTriangle, Upload, LayoutList, Search, ChevronRight, RefreshCw, X, Inbox } from 'lucide-react';
+import { ArrowLeft, FileText, Trash2, AlertTriangle, Upload, LayoutList, Search, ChevronRight, RefreshCw, X, Inbox, Pause } from 'lucide-react';
 import './App.css';
 import { API_BASE } from './api';
+
+function formatEta({ percent, eta_seconds }) {
+  if (eta_seconds == null) return percent ? '' : 'Estimating time...';
+  if (eta_seconds < 60) return `~${Math.max(eta_seconds, 1)}s left`;
+  return `~${Math.round(eta_seconds / 60)} min left`;
+}
 
 export default function DatabaseExplorer() {
   const navigate = useNavigate();
@@ -25,6 +31,15 @@ export default function DatabaseExplorer() {
   const uploadInputRef = useRef(null);
   const uploadSourceRef = useRef(null);
 
+  // Background processing jobs from the backend; failed ones linger until dismissed here
+  const [uploads, setUploads] = useState([]);
+  const [dismissedUploadIds, setDismissedUploadIds] = useState(new Set());
+  const runningUploadsRef = useRef(0);
+  // Server unreachable: its uploads are paused and resume from saved progress when it restarts
+  const [serverDown, setServerDown] = useState(false);
+  const isProcessing = uploads.some(u => !u.error);
+  const visibleUploads = uploads.filter(u => !dismissedUploadIds.has(u.id));
+
   const query = search.trim();
 
   useEffect(() => {
@@ -33,6 +48,33 @@ export default function DatabaseExplorer() {
       .then(data => setUploadSources(data.sources || []))
       .catch(err => console.error("Failed to fetch upload sources", err));
   }, []);
+
+  const fetchUploads = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/uploads`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const list = data.uploads || [];
+      const running = list.filter(u => !u.error).length;
+      // A job left the running set, so its document is now in (or failed out of) the list
+      if (running < runningUploadsRef.current) fetchDocuments();
+      runningUploadsRef.current = running;
+      setUploads(list);
+      setServerDown(false);
+    } catch (error) {
+      console.error("Failed to fetch uploads", error);
+      setServerDown(true);
+    }
+  };
+
+  useEffect(() => { fetchUploads(); }, []);
+
+  // Poll only while something is processing
+  useEffect(() => {
+    if (!isProcessing) return;
+    const timer = setInterval(fetchUploads, 1000);
+    return () => clearInterval(timer);
+  }, [isProcessing]);
 
   // Backend filters by name; debounce so typing doesn't fire a request per key
   useEffect(() => {
@@ -154,7 +196,7 @@ export default function DatabaseExplorer() {
       });
 
       if (res.ok) {
-        await refresh();
+        await fetchUploads();
       } else {
         setError(`Couldn't upload ${file.name}. Check the file type and try again.`);
       }
@@ -186,9 +228,9 @@ export default function DatabaseExplorer() {
               onClick={() => { uploadSourceRef.current = src.value; uploadInputRef.current?.click(); }}
               disabled={isUploading}
             >
-              {isUploading ? <RefreshCw size={15} className="spinning" /> : <Upload size={15} />}
+              <Upload size={15} />
               <span className="source-dot" style={{ background: src.color }} aria-hidden="true" />
-              {isUploading ? 'Uploading...' : `Upload ${src.label}`}
+              {`Upload ${src.label}`}
             </button>
           ))}
         </div>
@@ -217,12 +259,62 @@ export default function DatabaseExplorer() {
         )}
 
         <div className="explorer-list">
+          {visibleUploads.map(u => {
+            const src = uploadSources.find(s => s.value === u.source);
+            return (
+              <article key={u.id} className="doc-card upload-card">
+                <div className="doc-row">
+                  <div className="doc-toggle">
+                    <span className={`doc-icon ${u.error ? 'failed' : ''}`}>
+                      {u.error ? <AlertTriangle size={18} /> : serverDown ? <Pause size={18} /> : <RefreshCw size={18} className="spinning" />}
+                    </span>
+                    <span style={{ minWidth: 0, flex: 1 }}>
+                      <div className="doc-name" title={u.filename}>{u.filename}</div>
+                      {u.error ? (
+                        <div className="upload-status failed">{u.error}</div>
+                      ) : (
+                        <>
+                          <div className="upload-status">
+                            <span>
+                              {src && <span className="source-dot" style={{ background: src.color }} aria-hidden="true" />}
+                              {serverDown ? 'Paused, waiting for the server' : u.stage}{u.percent != null && ` · ${u.percent}%`}
+                            </span>
+                            <span>{serverDown ? '' : formatEta(u)}</span>
+                          </div>
+                          <div
+                            className={`upload-progress ${serverDown ? 'paused' : ''}`}
+                            role="progressbar"
+                            aria-label={`Processing ${u.filename}`}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={u.percent ?? undefined}
+                          >
+                            <span className={u.percent == null ? 'indeterminate' : undefined} style={u.percent == null ? undefined : { width: `${u.percent}%` }} />
+                          </div>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  {u.error && (
+                    <button
+                      className="icon-btn"
+                      onClick={() => setDismissedUploadIds(prev => new Set(prev).add(u.id))}
+                      aria-label={`Dismiss ${u.filename}`}
+                      title="Dismiss"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
           {loadingDocs ? (
             <div aria-label="Loading documents" role="status">
               {[0, 1, 2].map(i => <div key={i} className="skeleton" style={{ marginBottom: 8 }} />)}
             </div>
           ) : documents.length === 0 ? (
-            <div className="empty-state">
+            visibleUploads.length > 0 && !query ? null : <div className="empty-state">
               <Inbox size={32} />
               {query ? (
                 <><strong>No matches</strong>No documents match "{query}".</>

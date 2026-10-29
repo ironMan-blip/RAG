@@ -1,4 +1,6 @@
 import hashlib
+import logging
+import threading
 from typing import Optional
 
 from psycopg2.extras import Json
@@ -7,7 +9,10 @@ from core.database import db_cursor
 from services.chunk_service import embed_chunks, replace_chunks
 from services.chunker import chunk_document
 from services.display import format_metadata
+from services import upload_jobs
 from services.tagging_service import generate_chunk_summaries, generate_chunk_tags, generate_document_metadata
+
+logger = logging.getLogger(__name__)
 
 # Upload origins, keyed by the name clients send; values are source.uuid rows from schema.sql
 SOURCE_IDS = {
@@ -42,8 +47,11 @@ def _is_unchanged(cur, file_name: str, file_hash: str, source_id: str, session_i
     return cur.fetchone() is not None
 
 
-def process_and_save_document(file_name: str, content: bytes, content_type: str, source_id: str, session_id: str = None) -> str:
-    """Extract, chunk, embed and store a file. Returns a status message."""
+def process_and_save_document(file_name: str, content: bytes, content_type: str, source_id: str, session_id: str = None,
+                              job: Optional[upload_jobs.UploadJob] = None) -> str:
+    """Extract, chunk, embed and store a file, reporting progress to job if given. Returns a status message."""
+    # Untracked (chat): results live in memory only. Tracked: results saved so far are reused, not regenerated.
+    job = job or upload_jobs.UploadJob(file_name, "")
     is_tool = source_id == SOURCE_IDS['tools']
     if is_tool:
         session_id = None  # tool documents are global
@@ -54,21 +62,30 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
         if _is_unchanged(cur, file_name, file_hash, source_id, session_id):
             return f"File {file_name} already exists (duplicate not saved)"
 
-    chunks = chunk_document(content, content_type, file_name)
+    if job.chunks is None:
+        job.set_chunks(chunk_document(content, content_type, file_name))
+    chunks = job.chunks
     if not chunks:
         return f"File {file_name} has no extractable text (not saved)"
 
     # Slow work (LLM tagging, embedding) happens before the write transaction opens
     texts = [c["text"] for c in chunks]
+    job.begin()
     if is_tool:
-        doc_metadata, chunk_tags = generate_document_metadata("\n\n".join(texts)), generate_chunk_tags(texts)
-    else:
-        doc_metadata, chunk_tags = None, [None] * len(chunks)
-    summaries = generate_chunk_summaries(texts)
+        if job.doc_metadata is None:
+            job.stage = "Generating metadata"
+            job.set_doc_metadata(generate_document_metadata("\n\n".join(texts)))
+        job.stage = "Tagging chunks"
+        _fill_missing(job.tags, texts, generate_chunk_tags, job.set_tags)
+    job.stage = "Summarizing chunks"
+    _fill_missing(job.summaries, texts, generate_chunk_summaries, job.set_summary)
+    doc_metadata, chunk_tags, summaries = job.doc_metadata, job.tags, job.summaries
     # Chunk i stores the summary of chunk i-1; the first chunk has none
     previous_summaries = [None] + summaries[:-1]
+    job.stage = "Embedding"
     embeddings, embedded_from = embed_chunks(chunks, summaries)
 
+    job.stage = "Saving"
     with db_cursor() as cur:
         cur.execute(
             """INSERT INTO documents (filename, file_hash, source_id, session_id, metadata)
@@ -82,6 +99,41 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
         replace_chunks(cur, cur.fetchone()[0], chunks, embeddings, embedded_from, chunk_tags, previous_summaries)
 
     return f"File {file_name} uploaded successfully and saved to database"
+
+
+def _fill_missing(results: list, texts: list[str], generate, save):
+    """Generate results only for texts that have none yet, saving each as it finishes."""
+    missing = [i for i, r in enumerate(results) if r is None]
+    if missing:
+        generate([texts[i] for i in missing], on_result=lambda j, r: save(missing[j], r))
+
+
+def _process_in_background(job: upload_jobs.UploadJob):
+    def work():
+        try:
+            process_and_save_document(job.filename, job.content, job.content_type, SOURCE_IDS[job.source], job=job)
+            upload_jobs.finish(job)
+        except Exception:
+            if upload_jobs.stopping:
+                return  # the server is going down; the job's row stays and resumes on next start
+            logger.exception("Upload of %s failed", job.filename)
+            upload_jobs.finish(job, error="Processing failed. Check the file type, or the server log for details.")
+
+    threading.Thread(target=work, daemon=True).start()
+
+
+def start_upload(file_name: str, content: bytes, content_type: str, source: str) -> dict:
+    """Process an upload in the background; its progress is listed by upload_jobs.list_jobs until it finishes."""
+    job = upload_jobs.create(file_name, source, content, content_type)
+    _process_in_background(job)
+    return job.to_dict()
+
+
+def resume_uploads():
+    """Continue uploads a previous run left unfinished, from their last saved result."""
+    for job in upload_jobs.load_unfinished():
+        logger.info("Resuming upload of %s", job.filename)
+        _process_in_background(job)
 
 
 def get_all_documents(search: str = ""):

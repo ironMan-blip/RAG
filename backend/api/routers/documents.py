@@ -1,20 +1,21 @@
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
-from services import chunk_service, document_service
+from services import chunk_service, document_service, upload_jobs
 
 router = APIRouter()
 
 
-@router.post("/upload")
+@router.post("/upload", status_code=202)
 async def upload_file(file: UploadFile = File(...), source: str = Form('library')):
-    source_id = document_service.SOURCE_IDS.get(source)
-    if source_id is None:
+    if source not in document_service.SOURCE_IDS:
         raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
-    upload_message = await run_in_threadpool(
-        document_service.process_and_save_document, file.filename, await file.read(), file.content_type, source_id
-    )
-    return {"filename": file.filename, "status": "success", "message": upload_message}
+    return {"upload": document_service.start_upload(file.filename, await file.read(), file.content_type, source)}
+
+
+@router.get("/uploads")
+async def get_uploads():
+    return {"uploads": upload_jobs.list_jobs()}
 
 
 @router.get("/upload-sources")

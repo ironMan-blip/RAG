@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Optional
+from typing import Callable, Optional
 
 import openai
 from langchain_core.exceptions import OutputParserException
@@ -115,8 +115,11 @@ def _retry_delay(err: Exception, attempt: int) -> float:
     return min(MAX_BACKOFF_SECONDS, 2.0 ** attempt)
 
 
-def _run(chain, texts: list[str], persist: bool = False) -> list[Optional[dict]]:
+def _run(chain, texts: list[str], persist: bool = False,
+         on_success: Optional[Callable[[int, dict], None]] = None) -> list[Optional[dict]]:
     """Run a chain over each text concurrently; None where generation fails.
+
+    on_success(index, result) is called as each text finishes, so callers can save results before the batch ends.
 
     With persist, failed texts are retried until every one succeeds, adapting to the cause: a stuck call gets a
     longer timeout, unparseable output a higher temperature, a rate limit waits for its reset. Errors no retry
@@ -127,16 +130,20 @@ def _run(chain, texts: list[str], persist: bool = False) -> list[Optional[dict]]
     attempt = timeouts = bad_outputs = 0
     while pending:
         attempt += 1
-        batch = chain(min(1.0, 0.3 * bad_outputs), LLM_TIMEOUT_SECONDS * 2 ** timeouts).batch(
+        errors = {}
+        # As completed, so on_success sees each result while the rest of the batch runs
+        for j, r in chain(min(1.0, 0.3 * bad_outputs), LLM_TIMEOUT_SECONDS * 2 ** timeouts).batch_as_completed(
             [{"text": texts[i]} for i in pending],
             config={"max_concurrency": 2},  # local Ollama queues beyond this; more only costs RAM
             return_exceptions=True,
-        )
-        errors = {i: r for i, r in zip(pending, batch) if isinstance(r, Exception)}
-        for i, r in zip(pending, batch):
-            if i not in errors:
-                results[i] = r
-        pending = list(errors)
+        ):
+            if isinstance(r, Exception):
+                errors[pending[j]] = r
+            else:
+                results[pending[j]] = r
+                if on_success:
+                    on_success(pending[j], r)
+        pending = sorted(errors)
         for err in errors.values():
             logger.warning("Metadata generation failed (attempt %d, %s): %s", attempt, _diagnose(err) or "not retryable", err)
         if not pending or not persist:
@@ -160,15 +167,17 @@ def generate_document_metadata(text: str) -> Optional[dict]:
 
 
 @traceable
-def generate_chunk_tags(texts: list[str]) -> list[Optional[list[str]]]:
-    """Tags for each chunk; retries until every chunk succeeds."""
-    return [r["tags"] if r else None for r in _run(_chunk_chain, texts, persist=True)]
+def generate_chunk_tags(texts: list[str], on_result: Optional[Callable[[int, list[str]], None]] = None) -> list[Optional[list[str]]]:
+    """Tags for each chunk; retries until every chunk succeeds. on_result(index, tags) fires as each one finishes."""
+    on_success = on_result and (lambda i, r: on_result(i, r["tags"]))
+    return [r["tags"] if r else None for r in _run(_chunk_chain, texts, persist=True, on_success=on_success)]
 
 
 @traceable
-def generate_chunk_summaries(texts: list[str]) -> list[Optional[str]]:
-    """Summary of each chunk; retries until every chunk succeeds."""
-    return [r["summary"] if r else None for r in _run(_summary_chain, texts, persist=True)]
+def generate_chunk_summaries(texts: list[str], on_result: Optional[Callable[[int, str], None]] = None) -> list[Optional[str]]:
+    """Summary of each chunk; retries until every chunk succeeds. on_result(index, summary) fires as each one finishes."""
+    on_success = on_result and (lambda i, r: on_result(i, r["summary"]))
+    return [r["summary"] if r else None for r in _run(_summary_chain, texts, persist=True, on_success=on_success)]
 
 
 @traceable

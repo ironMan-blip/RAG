@@ -56,4 +56,19 @@ CREATE TABLE IF NOT EXISTS chat_history (
 ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS prompt TEXT;
 ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS timings JSONB;
 
+-- Uploads still processing: the file plus every result finished so far, so a restart resumes instead of
+-- starting over. A row is deleted when its document is saved (or processing fails).
+CREATE TABLE IF NOT EXISTS upload_jobs (
+    id VARCHAR(255) PRIMARY KEY,
+    filename VARCHAR(255) NOT NULL,
+    source VARCHAR(255) NOT NULL, -- 'library' or 'tools'
+    content BYTEA NOT NULL,
+    content_type VARCHAR(255),
+    chunks JSONB, -- extracted chunks; NULL until extraction finishes
+    doc_metadata JSONB, -- tools only
+    tags JSONB, -- per chunk, null entries not generated yet
+    summaries JSONB, -- per chunk, null entries not generated yet
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS chat_history_session_idx ON chat_history (session_id, created_at);
