@@ -1,6 +1,9 @@
 import logging
+import time
 from typing import Optional
 
+import openai
+from langchain_core.exceptions import OutputParserException
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
@@ -13,6 +16,10 @@ logger = logging.getLogger(__name__)
 
 # Cap on text sent to the LLM for whole-document metadata
 DOC_METADATA_CHARS = 20000
+# A call running longer than this is treated as stuck; Ollama aborts it once the client hangs up.
+# Doubles after each timeout so a merely slow call (cold model load, long document) still finishes.
+LLM_TIMEOUT_SECONDS = 180
+MAX_BACKOFF_SECONDS = 60
 
 
 class DocumentMetadata(BaseModel):
@@ -44,16 +51,20 @@ class ChatTitle(BaseModel):
     title: str = Field(description="A 3-5 word title for the chat, no quotes")
 
 
-_llm = ChatOpenAI(
-    model=settings.TAGGING_MODEL,
-    api_key="ollama",  # Ollama ignores the key but the client requires one
-    base_url=settings.LLM_BASE_URL,
-    temperature=0.0,
-    reasoning_effort="none",  # Qwen3 thinking adds latency and nothing to tags
-)
+def _llm(temperature: float, timeout: float) -> ChatOpenAI:
+    return ChatOpenAI(
+        model=settings.TAGGING_MODEL,
+        api_key="ollama",  # Ollama ignores the key but the client requires one
+        base_url=settings.LLM_BASE_URL,
+        temperature=temperature,
+        timeout=timeout,
+        max_retries=0,  # _run owns retries, so rate-limit waits and stuck detection follow one policy
+        reasoning_effort="none",  # Qwen3 thinking adds latency and nothing to tags
+    )
 
 
 def _chain(schema: type[BaseModel], instruction: str):
+    """A builder of the chain at a given temperature and timeout, so retries can change both."""
     parser = JsonOutputParser(pydantic_object=schema)
     prompt = PromptTemplate(
         template=instruction + "\n{format_instructions}\n\nText:\n{text}",
@@ -61,9 +72,9 @@ def _chain(schema: type[BaseModel], instruction: str):
         partial_variables={"format_instructions": parser.get_format_instructions()},
     )
     # Constrained decoding: small local models otherwise echo the schema back instead of filling it
-    llm = _llm.bind(response_format={"type": "json_schema",
-                                     "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()}})
-    return prompt | llm | parser
+    response_format = {"type": "json_schema",
+                       "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()}}
+    return lambda temperature, timeout: prompt | _llm(temperature, timeout).bind(response_format=response_format) | parser
 
 
 _document_chain = _chain(DocumentMetadata, "Given the following document, generate its metadata.")
@@ -73,35 +84,91 @@ _query_chain = _chain(QueryProfile, "Given the following user question, guess it
 _title_chain = _chain(ChatTitle, "Given the following first message of a chat, write a short title for the chat.")
 
 
-def _run(chain, texts: list[str]) -> list[Optional[dict]]:
-    """Run a chain over each text concurrently; None where generation fails."""
-    results = chain.batch(
-        [{"text": t} for t in texts],
-        config={"max_concurrency": 2},  # local Ollama queues beyond this; more only costs RAM
-        return_exceptions=True,
-    )
-    for r in results:
-        if isinstance(r, Exception):
-            logger.warning("Metadata generation failed: %s", r)
-    return [None if isinstance(r, Exception) else r for r in results]
+def _diagnose(err: Exception) -> Optional[str]:
+    """What went wrong, for errors a retry can fix; None for the rest (bad key, unknown model, bad request, bugs)."""
+    if isinstance(err, openai.APITimeoutError):
+        return "stuck (timed out)"
+    if isinstance(err, openai.APIConnectionError):
+        return "LLM server unreachable"
+    if isinstance(err, openai.RateLimitError):
+        return "rate limited"
+    if isinstance(err, openai.InternalServerError):
+        return "LLM server error"
+    if isinstance(err, OutputParserException):
+        return "unparseable output"
+    return None
+
+
+def _retry_delay(err: Exception, attempt: int) -> float:
+    """Seconds to wait before retrying: until a rate limit resets if the provider says when, else exponential backoff."""
+    if isinstance(err, openai.RateLimitError):
+        try:
+            after = err.response.headers.get("retry-after")
+            if after:
+                return float(after)
+            reset_ms = float(err.body["metadata"]["headers"]["X-RateLimit-Reset"])  # OpenRouter's reset epoch
+            return max(1.0, reset_ms / 1000 - time.time())
+        except (TypeError, KeyError, ValueError):
+            pass
+    if isinstance(err, (OutputParserException, openai.APITimeoutError)):
+        return 0.0  # the fix is a higher temperature or longer timeout, and a stuck call already waited
+    return min(MAX_BACKOFF_SECONDS, 2.0 ** attempt)
+
+
+def _run(chain, texts: list[str], persist: bool = False) -> list[Optional[dict]]:
+    """Run a chain over each text concurrently; None where generation fails.
+
+    With persist, failed texts are retried until every one succeeds, adapting to the cause: a stuck call gets a
+    longer timeout, unparseable output a higher temperature, a rate limit waits for its reset. Errors no retry
+    can fix raise instead, so stored metadata is either complete or the upload fails loudly.
+    """
+    results: list = [None] * len(texts)
+    pending = list(range(len(texts)))
+    attempt = timeouts = bad_outputs = 0
+    while pending:
+        attempt += 1
+        batch = chain(min(1.0, 0.3 * bad_outputs), LLM_TIMEOUT_SECONDS * 2 ** timeouts).batch(
+            [{"text": texts[i]} for i in pending],
+            config={"max_concurrency": 2},  # local Ollama queues beyond this; more only costs RAM
+            return_exceptions=True,
+        )
+        errors = {i: r for i, r in zip(pending, batch) if isinstance(r, Exception)}
+        for i, r in zip(pending, batch):
+            if i not in errors:
+                results[i] = r
+        pending = list(errors)
+        for err in errors.values():
+            logger.warning("Metadata generation failed (attempt %d, %s): %s", attempt, _diagnose(err) or "not retryable", err)
+        if not pending or not persist:
+            break
+
+        fatal = next((e for e in errors.values() if _diagnose(e) is None), None)
+        if fatal is not None:
+            raise fatal
+        timeouts += any(isinstance(e, openai.APITimeoutError) for e in errors.values())
+        bad_outputs += any(isinstance(e, OutputParserException) for e in errors.values())
+        delay = max(_retry_delay(e, attempt) for e in errors.values())
+        logger.warning("Retrying %d of %d in %.0fs", len(pending), len(texts), delay)
+        time.sleep(delay)
+    return results
 
 
 @traceable
 def generate_document_metadata(text: str) -> Optional[dict]:
-    """Year, grade, subject, topic and subtopic for a whole document; None on failure."""
-    return _run(_document_chain, [text[:DOC_METADATA_CHARS]])[0]
+    """Year, grade, subject, topic and subtopic for a whole document; retries until it succeeds."""
+    return _run(_document_chain, [text[:DOC_METADATA_CHARS]], persist=True)[0]
 
 
 @traceable
 def generate_chunk_tags(texts: list[str]) -> list[Optional[list[str]]]:
-    """Tags for each chunk; None where generation fails."""
-    return [r["tags"] if r else None for r in _run(_chunk_chain, texts)]
+    """Tags for each chunk; retries until every chunk succeeds."""
+    return [r["tags"] if r else None for r in _run(_chunk_chain, texts, persist=True)]
 
 
 @traceable
 def generate_chunk_summaries(texts: list[str]) -> list[Optional[str]]:
-    """Summary of each chunk; None where generation fails."""
-    return [r["summary"] if r else None for r in _run(_summary_chain, texts)]
+    """Summary of each chunk; retries until every chunk succeeds."""
+    return [r["summary"] if r else None for r in _run(_summary_chain, texts, persist=True)]
 
 
 @traceable
