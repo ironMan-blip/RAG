@@ -225,7 +225,8 @@ function App() {
 
       <div className="chat-container">
         <header className="chat-header">
-          <button className="menu-btn" onClick={() => setIsSidebarOpen(true)}>
+          {/* Refetch on open: the backend saves a turn after replying, so the post-send fetch can miss it */}
+          <button className="menu-btn" onClick={() => { fetchChatSessions(); setIsSidebarOpen(true); }}>
             <Menu size={24} />
           </button>
           <div className="header-icon">
