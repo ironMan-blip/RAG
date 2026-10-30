@@ -46,7 +46,7 @@ def _is_unchanged(cur, file_name: str, file_hash: str, source_id: str, session_i
     cur.execute(
         """SELECT 1 FROM documents
            WHERE filename = %s AND file_hash = %s AND source_id = %s
-             AND session_id IS NOT DISTINCT FROM %s""",
+             AND session_id IS NOT DISTINCT FROM %s AND status = 'ready'""",
         (file_name, file_hash, source_id, session_id),
     )
     return cur.fetchone() is not None
@@ -60,7 +60,8 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
     is_tool = source_id == SOURCE_IDS['tools']
     if is_tool:
         session_id = None  # tool documents are global
-    file_hash = hashlib.sha256(content).hexdigest()
+    # A resumed job has no file content, only the hash stored when it started
+    file_hash = job.file_hash or hashlib.sha256(content).hexdigest()
 
     # Cheap duplicate check first, so a re-upload skips the slow extraction below
     with db_cursor() as cur:
@@ -93,16 +94,22 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
     job.check_cancelled()
     job.stage = "Saving"
     with db_cursor() as cur:
+        # Replaces a saved document of that name, or this job's own 'uploading' one, never another upload's
         cur.execute(
-            """INSERT INTO documents (filename, file_hash, source_id, session_id, metadata)
-               VALUES (%s, %s, %s, %s, %s)
+            """INSERT INTO documents (filename, file_hash, source_id, session_id, metadata, status)
+               VALUES (%s, %s, %s, %s, %s, 'ready')
                ON CONFLICT (filename) DO UPDATE SET
                    file_hash = EXCLUDED.file_hash, source_id = EXCLUDED.source_id,
-                   session_id = EXCLUDED.session_id, metadata = EXCLUDED.metadata
+                   session_id = EXCLUDED.session_id, metadata = EXCLUDED.metadata, status = 'ready',
+                   content = NULL
+               WHERE documents.status = 'ready' OR documents.id = %s
                RETURNING id""",
-            (file_name, file_hash, source_id, session_id, Json(doc_metadata) if doc_metadata else None),
+            (file_name, file_hash, source_id, session_id, Json(doc_metadata) if doc_metadata else None, job.id),
         )
-        replace_chunks(cur, cur.fetchone()[0], chunks, embeddings, embedded_from, chunk_tags, previous_summaries)
+        row = cur.fetchone()
+        if row is None:
+            return f"File {file_name} is already being uploaded (not saved)"
+        replace_chunks(cur, row[0], chunks, embeddings, embedded_from, chunk_tags, previous_summaries)
 
     return f"File {file_name} uploaded successfully and saved to database"
 
@@ -124,7 +131,7 @@ def _process_in_background(job: upload_jobs.UploadJob):
             logger.info("Upload of %s %s", job.filename, "paused" if job.paused else "cancelled")
         except Exception:
             if upload_jobs.stopping:
-                return  # the server is going down; the job's row stays and resumes on next start
+                return  # the server is going down; the job's rows stay and resume on next start
             logger.exception("Upload of %s failed", job.filename)
             upload_jobs.finish(job, error="Processing failed. Check the file type, or the server log for details.")
         finally:
@@ -135,14 +142,28 @@ def _process_in_background(job: upload_jobs.UploadJob):
     job.worker.start()
 
 
-def start_upload(file_name: str, content: bytes, content_type: str, source: str) -> dict:
-    """Process an upload in the background; its progress is listed by upload_jobs.list_jobs until it finishes."""
-    job = upload_jobs.create(file_name, source, content, content_type)
+def start_upload(file_name: str, content: bytes, content_type: str, source: str) -> Optional[dict]:
+    """Process an upload in the background; its progress is listed by upload_jobs.list_jobs until it finishes.
+
+    Returns None for a file already saved unchanged. Raises UploadInProgress if that filename is uploading.
+    """
+    file_hash = hashlib.sha256(content).hexdigest()
+    # Checked before create, which would otherwise overwrite the saved document
+    with db_cursor() as cur:
+        if _is_unchanged(cur, file_name, file_hash, SOURCE_IDS[source], None):
+            return None
+    job = upload_jobs.create(file_name, source, SOURCE_IDS[source], content, content_type, file_hash)
+    if job is None:
+        raise UploadInProgress(f"{file_name} is already being uploaded.")
     _process_in_background(job)
     return job.to_dict()
 
 
-def pause_upload(job_id: str) -> bool:
+class UploadInProgress(Exception):
+    pass
+
+
+def pause_upload(job_id: int) -> bool:
     """Stop a job's worker at its next saved result; its progress is kept for resume_upload."""
     job = upload_jobs.get(job_id)
     if job is None or job.error:
@@ -151,7 +172,7 @@ def pause_upload(job_id: str) -> bool:
     return True
 
 
-def resume_upload(job_id: str) -> Optional[str]:
+def resume_upload(job_id: int) -> Optional[str]:
     """Continue a paused job from its saved progress. Returns an error message, or None on success."""
     job = upload_jobs.get(job_id)
     if job is None or job.error:
@@ -165,7 +186,7 @@ def resume_upload(job_id: str) -> Optional[str]:
 
 def resume_uploads():
     """Continue uploads a previous run left unfinished, from their last saved result."""
-    for job in upload_jobs.load_unfinished():
+    for job in upload_jobs.load_unfinished({uuid: name for name, uuid in SOURCE_IDS.items()}):
         logger.info("Resuming upload of %s", job.filename)
         _process_in_background(job)
 
@@ -175,15 +196,16 @@ def get_all_documents(search: str = ""):
     pattern = "%" + search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     with db_cursor() as cur:
         cur.execute("""
-            SELECT d.id, d.filename, d.source_id, s.source_name, d.metadata
+            SELECT d.id, d.filename, d.source_id, s.source_name, d.metadata,
+                   EXISTS (SELECT 1 FROM chunks c WHERE c.doc_id = d.id AND c.status = 'unfinished')
             FROM documents d
             LEFT JOIN source s ON d.source_id = s.uuid
-            WHERE d.filename ILIKE %s
+            WHERE d.filename ILIKE %s AND d.status = 'ready'
             ORDER BY d.id DESC
         """, (pattern,))
         rows = cur.fetchall()
     docs = []
-    for doc_id, filename, source_id, source_name, metadata in rows:
+    for doc_id, filename, source_id, source_name, metadata, unfinished in rows:
         label, bg_color, text_color = TAG_STYLES.get(source_id, (source_name or "unknown", '#f1f5f9', '#64748b'))
         docs.append({
             "id": doc_id,
@@ -192,6 +214,7 @@ def get_all_documents(search: str = ""):
             "tag_bg_color": bg_color,
             "tag_text_color": text_color,
             "metadata_text": format_metadata(metadata, "No metadata available for this document."),
+            "unfinished_text": "Some chunks failed to generate. Open the document to regenerate them." if unfinished else None,
         })
     return docs
 
@@ -200,14 +223,15 @@ def get_document_names(session_id: str = None) -> list[str]:
     """Filenames visible to a chat: global documents plus that session's attachments."""
     with db_cursor() as cur:
         cur.execute(
-            "SELECT filename FROM documents WHERE session_id IS NULL OR session_id = %s ORDER BY id DESC",
+            """SELECT filename FROM documents
+               WHERE status = 'ready' AND (session_id IS NULL OR session_id = %s) ORDER BY id DESC""",
             (session_id,),
         )
         return [row[0] for row in cur.fetchall()]
 
 
 def delete_document(doc_id: int) -> bool:
-    # chunks go with it via ON DELETE CASCADE
+    # chunks go with it via ON DELETE CASCADE; an uploading document is stopped through its upload instead
     with db_cursor() as cur:
-        cur.execute("DELETE FROM documents WHERE id = %s RETURNING id", (doc_id,))
+        cur.execute("DELETE FROM documents WHERE id = %s AND status = 'ready' RETURNING id", (doc_id,))
         return cur.fetchone() is not None

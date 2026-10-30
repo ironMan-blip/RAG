@@ -138,6 +138,7 @@ export default function DatabaseExplorer() {
         ...prev,
         [docId]: prev[docId].map(c => c.chunk_id === chunkId ? data.chunk : c)
       } : prev);
+      fetchDocuments();  // the document's unfinished mark may have cleared
     } catch (error) {
       console.error(`Failed to regenerate ${kind}`, error);
       setError(`Couldn't regenerate the ${kind === 'tags' ? 'tags' : 'summary'}. Try again.`);
@@ -365,7 +366,7 @@ export default function DatabaseExplorer() {
             const isExpanded = expandedDocId === doc.id;
             const chunks = chunksByDoc[doc.id];
             return (
-              <article key={doc.id} className={`doc-card ${isExpanded ? 'expanded' : ''}`}>
+              <article key={doc.id} className={`doc-card ${isExpanded ? 'expanded' : ''} ${doc.unfinished_text ? 'unfinished' : ''}`}>
                 <div className="doc-row">
                   <button className="doc-toggle" onClick={() => toggleDocument(doc.id)} aria-expanded={isExpanded}>
                     <ChevronRight size={16} />
@@ -384,6 +385,7 @@ export default function DatabaseExplorer() {
 
                 {isExpanded && (
                   <div className="doc-detail">
+                    {doc.unfinished_text && <p className="detail-note unfinished">{doc.unfinished_text}</p>}
                     <div className="section-label">Metadata</div>
                     <pre className="meta-block">{doc.metadata_text}</pre>
                     <div className="section-label">Chunks{Array.isArray(chunks) && ` (${chunks.length})`}</div>
@@ -400,7 +402,7 @@ export default function DatabaseExplorer() {
                           const isRegeneratingTags = regeneratingChunkIds.has(`${chunk.chunk_id}:tags`);
                           const isRegeneratingSummary = regeneratingChunkIds.has(`${chunk.chunk_id}:previous-summary`);
                           return (
-                            <div key={chunk.chunk_id} className="chunk-card">
+                            <div key={chunk.chunk_id} className={`chunk-card ${chunk.unfinished_text ? 'unfinished' : ''}`}>
                               <button
                                 className="chunk-toggle"
                                 onClick={() => setExpandedChunkId(isChunkExpanded ? null : chunk.chunk_id)}
@@ -412,6 +414,7 @@ export default function DatabaseExplorer() {
                               </button>
                               {isChunkExpanded && (
                                 <>
+                                  {chunk.unfinished_text && <p className="detail-note unfinished">{chunk.unfinished_text}</p>}
                                   <div className="chunk-section meta">
                                     {regenerateButton(isRegeneratingTags, () => regenerate(doc.id, chunk.chunk_id, 'tags'), 'Regenerate tags')}
                                     <pre>{chunk.metadata_text}</pre>

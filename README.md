@@ -40,7 +40,7 @@ flowchart TB
         A2 -- no --> A4 --> A5 --> A6
     end
 
-    KB[("🗄️ <b>PostgreSQL + pgvector</b><br/>documents · chunks<br/>tags · vectors · summaries<br/>upload_jobs")]
+    KB[("🗄️ <b>PostgreSQL + pgvector</b><br/>documents · chunks<br/>tags · vectors · summaries<br/>status: uploading / ready")]
 
     subgraph ask["&nbsp;&nbsp;&nbsp;<b>② CHAT</b> · POST /chat&nbsp;&nbsp;&nbsp;"]
         direction LR

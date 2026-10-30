@@ -85,6 +85,7 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
         "min_chunks": MIN_CHUNKS,
     }
     scope = "d.filename = %(filename)s" if attached_filename else "d.session_id IS NULL OR d.session_id = %(session_id)s"
+    scope = f"d.status = 'ready' AND ({scope})"  # uploading documents have no embeddings yet
     try:
         with timed(timings, "search"), db_cursor() as cur:
             cur.execute(_CONTEXT_SQL.format(scope=scope), params)

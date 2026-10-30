@@ -15,7 +15,12 @@ async def upload_file(file: UploadFile = File(...), source: str = Form('library'
     # Starlette spools the body to disk, so size is known before reading it into memory
     if file.size is None or file.size > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail=f"{file.filename} is larger than the 50 MB limit.")
-    return {"upload": document_service.start_upload(file.filename, await file.read(), file.content_type, source)}
+    try:
+        upload = await run_in_threadpool(document_service.start_upload, file.filename, await file.read(),
+                                         file.content_type, source)
+    except document_service.UploadInProgress as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"upload": upload}
 
 
 @router.get("/uploads")
@@ -24,21 +29,21 @@ async def get_uploads():
 
 
 @router.delete("/uploads/{job_id}")
-async def cancel_upload(job_id: str):
+async def cancel_upload(job_id: int):
     if not await run_in_threadpool(upload_jobs.cancel, job_id):
         raise HTTPException(status_code=404, detail="Upload not found")
     return {"status": "success", "message": "Upload cancelled"}
 
 
 @router.post("/uploads/{job_id}/pause")
-async def pause_upload(job_id: str):
+async def pause_upload(job_id: int):
     if not document_service.pause_upload(job_id):
         raise HTTPException(status_code=404, detail="Upload not found")
     return {"status": "success", "message": "Upload pausing"}
 
 
 @router.post("/uploads/{job_id}/resume")
-async def resume_upload(job_id: str):
+async def resume_upload(job_id: int):
     error = document_service.resume_upload(job_id)
     if error:
         raise HTTPException(status_code=404 if error == "Upload not found" else 409, detail=error)

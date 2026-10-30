@@ -56,6 +56,25 @@ class Resume(unittest.TestCase):
         generate.assert_not_called()
 
 
+class LoadUnfinished(unittest.TestCase):
+    def tearDown(self):
+        upload_jobs._jobs.clear()
+
+    @mock.patch.object(upload_jobs, "db_cursor")
+    def test_rebuilds_jobs_from_uploading_rows(self, db):
+        cur = db.return_value.__enter__.return_value
+        cur.fetchall.side_effect = [
+            [(7, "a.pdf", "h", "tools-uuid", {"year": "2024"}, b"pdf"), (8, "b.txt", "h2", "tools-uuid", None, b"txt")],
+            [(7, 70, "x", {"type": "paragraph", "page": 1, "tags": ["t"], "summary": "s"}), (7, 71, "y", {})],
+        ]
+        extracted, extracting = upload_jobs.load_unfinished({"tools-uuid": "tools"})
+        self.assertEqual((extracted.id, extracted.source, extracted.chunk_ids), (7, "tools", [70, 71]))
+        self.assertEqual(extracted.chunks, [{"text": "x", "type": "paragraph", "page": 1}, {"text": "y"}])
+        self.assertEqual((extracted.tags, extracted.summaries), ([["t"], None], ["s", None]))
+        # Interrupted mid-extraction: starts over from the stored file
+        self.assertEqual((extracting.chunks, extracting.content, extracting.content_type), (None, b"txt", "text/plain"))
+
+
 class Registry(unittest.TestCase):
     def tearDown(self):
         upload_jobs._jobs.clear()

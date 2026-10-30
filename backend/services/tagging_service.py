@@ -20,6 +20,8 @@ DOC_METADATA_CHARS = 20000
 # Doubles after each timeout so a merely slow call (cold model load, long document) still finishes.
 LLM_TIMEOUT_SECONDS = 180
 MAX_BACKOFF_SECONDS = 60
+# Tries per chunk tag/summary before giving up; the chunk is then saved 'unfinished' for manual regeneration
+CHUNK_MAX_ATTEMPTS = 3
 
 
 class DocumentMetadata(BaseModel):
@@ -115,7 +117,7 @@ def _retry_delay(err: Exception, attempt: int) -> float:
     return min(MAX_BACKOFF_SECONDS, 2.0 ** attempt)
 
 
-def _run(chain, texts: list[str], persist: bool = False,
+def _run(chain, texts: list[str], persist: bool = False, max_attempts: Optional[int] = None,
          on_success: Optional[Callable[[int, dict], None]] = None) -> list[Optional[dict]]:
     """Run a chain over each text concurrently; None where generation fails.
 
@@ -123,7 +125,8 @@ def _run(chain, texts: list[str], persist: bool = False,
 
     With persist, failed texts are retried until every one succeeds, adapting to the cause: a stuck call gets a
     longer timeout, unparseable output a higher temperature, a rate limit waits for its reset. Errors no retry
-    can fix raise instead, so stored metadata is either complete or the upload fails loudly.
+    can fix raise instead, so stored metadata is either complete or the upload fails loudly. max_attempts caps
+    the retries; texts still failing then are left None.
     """
     results: list = [None] * len(texts)
     pending = list(range(len(texts)))
@@ -152,6 +155,9 @@ def _run(chain, texts: list[str], persist: bool = False,
         fatal = next((e for e in errors.values() if _diagnose(e) is None), None)
         if fatal is not None:
             raise fatal
+        if max_attempts and attempt >= max_attempts:
+            logger.warning("Giving up on %d of %d after %d attempts", len(pending), len(texts), attempt)
+            break
         timeouts += any(isinstance(e, openai.APITimeoutError) for e in errors.values())
         bad_outputs += any(isinstance(e, OutputParserException) for e in errors.values())
         delay = max(_retry_delay(e, attempt) for e in errors.values())
@@ -168,16 +174,18 @@ def generate_document_metadata(text: str) -> Optional[dict]:
 
 @traceable
 def generate_chunk_tags(texts: list[str], on_result: Optional[Callable[[int, list[str]], None]] = None) -> list[Optional[list[str]]]:
-    """Tags for each chunk; retries until every chunk succeeds. on_result(index, tags) fires as each one finishes."""
+    """Tags for each chunk, None where CHUNK_MAX_ATTEMPTS tries failed. on_result(index, tags) fires as each one finishes."""
     on_success = on_result and (lambda i, r: on_result(i, r["tags"]))
-    return [r["tags"] if r else None for r in _run(_chunk_chain, texts, persist=True, on_success=on_success)]
+    return [r["tags"] if r else None
+            for r in _run(_chunk_chain, texts, persist=True, max_attempts=CHUNK_MAX_ATTEMPTS, on_success=on_success)]
 
 
 @traceable
 def generate_chunk_summaries(texts: list[str], on_result: Optional[Callable[[int, str], None]] = None) -> list[Optional[str]]:
-    """Summary of each chunk; retries until every chunk succeeds. on_result(index, summary) fires as each one finishes."""
+    """Summary of each chunk, None where CHUNK_MAX_ATTEMPTS tries failed. on_result(index, summary) fires as each one finishes."""
     on_success = on_result and (lambda i, r: on_result(i, r["summary"]))
-    return [r["summary"] if r else None for r in _run(_summary_chain, texts, persist=True, on_success=on_success)]
+    return [r["summary"] if r else None
+            for r in _run(_summary_chain, texts, persist=True, max_attempts=CHUNK_MAX_ATTEMPTS, on_success=on_success)]
 
 
 @traceable

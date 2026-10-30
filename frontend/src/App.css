@@ -20,6 +20,9 @@
   --sidebar: #f1f6f3;
   --danger: #b91c1c;
   --danger-soft: #fef2f2;
+  --warn: #b45309;
+  --warn-soft: #fffbeb;
+  --warn-border: #fcd34d;
   --shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.05);
   --shadow-md: 0 4px 12px -2px rgba(28, 25, 23, 0.08), 0 2px 4px -2px rgba(28, 25, 23, 0.04);
   --shadow-lg: 0 24px 48px -12px rgba(28, 25, 23, 0.18);
@@ -1140,6 +1143,26 @@ kbd {
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
+}
+
+/* A chunk's tags or summary failed every try; the user regenerates them */
+.doc-card.unfinished,
+.chunk-card.unfinished {
+  border-color: var(--warn-border);
+  background: var(--warn-soft);
+}
+
+.doc-card.unfinished .doc-icon {
+  background: var(--surface);
+  color: var(--warn);
+}
+
+.chunk-card.unfinished .chunk-toggle {
+  color: var(--warn);
+}
+
+.detail-note.unfinished {
+  color: var(--warn);
 }
 
 .chunk-toggle {

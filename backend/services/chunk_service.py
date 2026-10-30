@@ -47,7 +47,7 @@ def _chunk_metadata(doc_id: int, chunk: dict, tags: Optional[list[str]], embedde
 
 def replace_chunks(cur, doc_id: int, chunks: list[dict], embeddings: list[list[float]], embedded_from: list[str],
                    tags: list[Optional[list[str]]], previous_summaries: list[Optional[str]]):
-    """Swap a document's chunks for new ones; runs in the caller's transaction."""
+    """Swap a document's chunks for new ones, marking those missing a generated part; runs in the caller's transaction."""
     cur.execute("DELETE FROM chunks WHERE doc_id = %s", (doc_id,))
     execute_values(
         cur,
@@ -55,13 +55,38 @@ def replace_chunks(cur, doc_id: int, chunks: list[dict], embeddings: list[list[f
         [(doc_id, c["text"], e, Json(_chunk_metadata(doc_id, c, t, f)), s)
          for c, e, f, t, s in zip(chunks, embeddings, embedded_from, tags, previous_summaries)],
     )
+    _refresh_status(cur, doc_id)
+
+
+def _tools_source_id() -> str:
+    """Tools documents are the only ones tagged."""
+    from services.document_service import SOURCE_IDS  # here, not at the top: document_service imports this module
+    return SOURCE_IDS["tools"]
+
+
+def _refresh_status(cur, doc_id: int, chunk_id: Optional[int] = None):
+    """Mark chunks 'unfinished' while missing tags (tools documents only) or, after the first chunk, the previous
+    chunk's summary; both are regenerated from that chunk. 'complete' otherwise. chunk_id limits it to one chunk."""
+    cur.execute(
+        """UPDATE chunks c SET status = CASE
+               WHEN (d.source_id = %(tools)s AND NOT COALESCE(c.metadata ? 'tags', false))
+                    OR (c.previous_summary IS NULL
+                        AND EXISTS (SELECT 1 FROM chunks p WHERE p.doc_id = c.doc_id AND p.chunk_id < c.chunk_id))
+               THEN 'unfinished' ELSE 'complete' END
+           FROM documents d
+           WHERE d.id = c.doc_id AND c.doc_id = %(doc_id)s
+             AND (%(chunk_id)s::int IS NULL OR c.chunk_id = %(chunk_id)s)""",
+        {"tools": _tools_source_id(), "doc_id": doc_id, "chunk_id": chunk_id},
+    )
 
 
 def get_document_chunks(doc_id: int):
     with db_cursor() as cur:
         cur.execute(
-            "SELECT chunk_id, metadata, chunk_text, previous_summary FROM chunks WHERE doc_id = %s ORDER BY chunk_id",
-            (doc_id,),
+            """SELECT c.chunk_id, c.metadata, c.chunk_text, c.previous_summary, c.status, d.source_id = %s
+               FROM chunks c JOIN documents d ON d.id = c.doc_id
+               WHERE c.doc_id = %s ORDER BY c.chunk_id""",
+            (_tools_source_id(), doc_id),
         )
         rows = cur.fetchall()
     return [
@@ -72,8 +97,11 @@ def get_document_chunks(doc_id: int):
             "chunk_text": chunk_text,
             # The first chunk has no previous chunk to summarize
             "previous_summary_text": _summary_text(previous_summary) if position > 1 else None,
+            "unfinished_text": (_unfinished_text(position, metadata, previous_summary, needs_tags)
+                                if status == "unfinished" else None),
         }
-        for position, (chunk_id, metadata, chunk_text, previous_summary) in enumerate(rows, start=1)
+        for position, (chunk_id, metadata, chunk_text, previous_summary, status, needs_tags)
+        in enumerate(rows, start=1)
     ]
 
 
@@ -84,6 +112,12 @@ def get_chunk(chunk_id: int) -> Optional[dict]:
         row = cur.fetchone()
     # shortcut: reads the whole document because the label needs the chunk's position; fine at current doc sizes
     return None if row is None else next((c for c in get_document_chunks(row[0]) if c["chunk_id"] == chunk_id), None)
+
+
+def _unfinished_text(position: int, metadata: Optional[dict], previous_summary: Optional[str], needs_tags: bool) -> str:
+    missing = [name for name, gone in (("tags", needs_tags and not (metadata or {}).get("tags")),
+                                       ("summary", position > 1 and not previous_summary)) if gone]
+    return f"Generation failed ({' and '.join(missing)}). Regenerate below."
 
 
 def _summary_text(summary: Optional[str]) -> str:
@@ -122,9 +156,10 @@ def regenerate_chunk_metadata(chunk_id: int) -> Optional[dict]:
     with db_cursor() as cur:
         cur.execute(
             """UPDATE chunks SET metadata = COALESCE(metadata, jsonb_build_object('document_id', doc_id)) || %s
-               WHERE chunk_id = %s""",
+               WHERE chunk_id = %s RETURNING doc_id""",
             (Json({"tags": tags}), chunk_id),
         )
+        _refresh_status(cur, cur.fetchone()[0], chunk_id)
     return get_chunk(chunk_id)
 
 
@@ -150,5 +185,6 @@ def regenerate_previous_summary(chunk_id: int) -> Optional[dict]:
         raise GenerationFailed(f"Summary generation failed for chunk {chunk_id}")
 
     with db_cursor() as cur:
-        cur.execute("UPDATE chunks SET previous_summary = %s WHERE chunk_id = %s", (summary, chunk_id))
+        cur.execute("UPDATE chunks SET previous_summary = %s WHERE chunk_id = %s RETURNING doc_id", (summary, chunk_id))
+        _refresh_status(cur, cur.fetchone()[0], chunk_id)
     return get_chunk(chunk_id)
