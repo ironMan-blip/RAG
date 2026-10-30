@@ -13,6 +13,7 @@ config:
   themeVariables:
     fontFamily: "Arial, Helvetica, sans-serif"
     fontSize: 16px
+    background: "#ffffff"
     lineColor: "#64748b"
     clusterBkg: "#f8fafc"
     clusterBorder: "#cbd5e1"
