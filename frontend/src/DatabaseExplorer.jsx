@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileText, Trash2, AlertTriangle, Upload, LayoutList, Search, ChevronRight, RefreshCw, X, Inbox, Pause, Play } from 'lucide-react';
 import { API_BASE } from './api';
+import ConfirmDialog from './ConfirmDialog';
 
 export default function DatabaseExplorer() {
   const navigate = useNavigate();
@@ -444,23 +445,9 @@ export default function DatabaseExplorer() {
       </div>
 
       {documentToDelete && (
-        <div className="modal-backdrop" onClick={() => !isDeleting && setDocumentToDelete(null)}>
-          <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-title" onClick={e => e.stopPropagation()}>
-            <div className="modal-icon"><AlertTriangle size={20} /></div>
-            <h2 id="delete-title">Delete document?</h2>
-            <p>
-              <strong>{documentToDelete.filename}</strong> and all its chunks will be removed from the library. This can't be undone.
-            </p>
-            <div className="modal-actions">
-              <button className="btn" onClick={() => setDocumentToDelete(null)} disabled={isDeleting} autoFocus>
-                Cancel
-              </button>
-              <button className="btn btn-danger" onClick={executeDelete} disabled={isDeleting}>
-                {isDeleting ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog title="Delete document?" busy={isDeleting} onConfirm={executeDelete} onCancel={() => setDocumentToDelete(null)}>
+          <strong>{documentToDelete.filename}</strong> and all its chunks will be removed from the library. This can't be undone.
+        </ConfirmDialog>
       )}
     </div>
   );

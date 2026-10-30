@@ -1,7 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Bot, Sparkles, Paperclip, X, Library, ChevronDown, ChevronRight, Check, Cpu, MessageSquarePlus, MessageSquare, Menu, Trash2, FileText } from 'lucide-react';
+import { ArrowUp, Bot, Sparkles, Paperclip, X, Library, ChevronDown, ChevronRight, Check, Cpu, MessageSquarePlus, MessageSquare, Menu, Trash2, FileText, Copy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { API_BASE } from './api';
+import ConfirmDialog from './ConfirmDialog';
+
+const SUGGESTIONS = [
+  'Summarize the documents in my library',
+  'What topics do my documents cover?',
+  'Find the key dates and deadlines mentioned',
+];
 
 // One segment per backend pipeline step, width proportional to its time
 function TimingBar({ timings, total }) {
@@ -22,6 +31,20 @@ function TimingBar({ timings, total }) {
   )
 }
 
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => navigator.clipboard.writeText(text).then(() => {
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  });
+  return (
+    <button className="msg-action" onClick={copy} aria-label="Copy reply">
+      {copied ? <Check size={14} /> : <Copy size={14} />}
+      {copied ? 'Copied' : 'Copy'}
+    </button>
+  );
+}
+
 function App() {
   const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
@@ -34,9 +57,11 @@ function App() {
   const [chatId, setChatId] = useState(null);
   const [chatSessions, setChatSessions] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [openPromptIdx, setOpenPromptIdx] = useState(null);
+  const [openDetailsIdx, setOpenDetailsIdx] = useState(null);
+  const [chatToDelete, setChatToDelete] = useState(null);
 
   const modelDropdownRef = useRef(null);
+  const textareaRef = useRef(null);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -44,8 +69,17 @@ function App() {
         setIsModelDropdownOpen(false);
       }
     }
+    function handleEscape(event) {
+      if (event.key !== 'Escape') return;
+      setIsModelDropdownOpen(false);
+      setIsSidebarOpen(false);
+    }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
   }, []);
 
   const chatBoxRef = useRef(null);
@@ -54,12 +88,13 @@ function App() {
   const startNewChat = () => {
     setInputValue("");
     setSelectedFile(null);
+    textareaRef.current?.focus();
     fetch(`${API_BASE}/chats`, { method: 'POST' })
       .then(res => res.json())
       .then(data => {
         setChatId(data.session_id);
         setMessages(data.history);
-        setOpenPromptIdx(null);
+        setOpenDetailsIdx(null);
       })
       .catch(err => console.error("Failed to start chat:", err));
   };
@@ -71,6 +106,7 @@ function App() {
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+    textareaRef.current?.focus();
   };
 
   const scrollToBottom = () => {
@@ -115,15 +151,15 @@ function App() {
         if (data.history) {
           setChatId(id);
           setMessages(data.history);
-          setOpenPromptIdx(null);
+          setOpenDetailsIdx(null);
           setIsSidebarOpen(false);
         }
       })
       .catch(err => console.error("Failed to load chat:", err));
   };
 
-  const deleteChat = (id, e) => {
-    e.stopPropagation();
+  const deleteChat = (id) => {
+    setChatToDelete(null);
     fetch(`${API_BASE}/chats/${id}`, { method: 'DELETE' })
       .then(() => {
         fetchChatSessions();
@@ -132,14 +168,14 @@ function App() {
       .catch(err => console.error("Failed to delete chat:", err));
   };
 
-  const sendMessage = async () => {
-    const text = inputValue.trim();
-    if (!text && !selectedFile) return;
+  const sendMessage = async (override) => {
+    const text = (override ?? inputValue).trim();
+    if ((!text && !selectedFile) || isLoading) return;
 
     // Show the raw input until the backend returns the stored version of this turn
     setMessages(prev => [...prev, { text: text || selectedFile.name, sender: 'user', pending: true }]);
     setInputValue("");
-    
+
     const fileToUpload = selectedFile;
     setSelectedFile(null); // Clear selected file right away
     setIsLoading(true);
@@ -153,7 +189,7 @@ function App() {
 
       const response = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
-        // Note: Do not set Content-Type header when using FormData, 
+        // Note: Do not set Content-Type header when using FormData,
         // the browser will automatically set it to multipart/form-data with boundary
         body: formData
       });
@@ -170,21 +206,24 @@ function App() {
       console.error('Error:', error);
       setMessages(prev => [
         ...prev.map(m => ({ ...m, pending: false })),
-        { text: "Couldn't reach the assistant. Check that the backend is running and try again.", sender: 'bot' }
+        { text: "Couldn't reach the assistant. Check that the backend is running and try again.", sender: 'bot', error: true }
       ]);
     } finally {
       setIsLoading(false);
+      textareaRef.current?.focus();
     }
   };
 
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       sendMessage();
     }
   };
 
   const currentTitle = chatSessions.find(s => s.id === chatId)?.name || 'New chat';
+  // Until the user writes, the thread holds only the backend greeting; show a welcome instead
+  const isFreshChat = !isLoading && !messages.some(m => m.sender === 'user');
 
   return (
     <div className="app-wrapper">
@@ -207,7 +246,7 @@ function App() {
           </button>
           <div className="sidebar-label">Recent</div>
           {chatSessions.length === 0 ? (
-            <p className="sidebar-empty">No conversations yet.</p>
+            <p className="sidebar-empty">Your conversations will appear here.</p>
           ) : (
             <ul className="chat-list">
               {chatSessions.map(session => (
@@ -221,7 +260,7 @@ function App() {
                     <MessageSquare size={15} />
                     <span>{session.name}</span>
                   </button>
-                  <button className="icon-btn danger" onClick={(e) => deleteChat(session.id, e)} aria-label={`Delete ${session.name}`} title="Delete chat">
+                  <button className="icon-btn danger" onClick={() => setChatToDelete(session)} aria-label={`Delete ${session.name}`} title="Delete chat">
                     <Trash2 size={14} />
                   </button>
                 </li>
@@ -258,6 +297,7 @@ function App() {
                 <div className="dropdown-menu">
                   <div className="dropdown-header">Model</div>
                   <div className="dropdown-list" role="listbox">
+                    {availableModels.length === 0 && <p className="dropdown-empty">No models available. Check that Ollama is running.</p>}
                     {availableModels.map(model => (
                       <button
                         key={model.value}
@@ -285,57 +325,94 @@ function App() {
         </header>
 
         <main className="chat-box" ref={chatBoxRef}>
-          <div className="chat-thread" aria-live="polite">
-            {messages.map((msg, idx) => (
-              <div key={idx} className={`message-wrapper ${msg.sender}-wrapper`}>
-                {msg.sender === 'bot' && (
+          {isFreshChat ? (
+            <section className="welcome">
+              <span className="welcome-mark"><Sparkles size={22} /></span>
+              <h2>What would you like to know?</h2>
+              <p>Ask a question and the assistant answers from the documents in your library. Attach a file to ask about it directly.</p>
+              <div className="suggestions">
+                {SUGGESTIONS.map(s => (
+                  <button key={s} className="suggestion" onClick={() => sendMessage(s)}>
+                    {s}
+                    <ArrowUp size={14} />
+                  </button>
+                ))}
+              </div>
+              <button className="welcome-link" onClick={() => navigate('/admin')}>
+                <Library size={14} />
+                Manage documents in the library
+              </button>
+            </section>
+          ) : (
+            <div className="chat-thread" aria-live="polite">
+              {messages.map((msg, idx) => (
+                <div key={idx} className={`message-wrapper ${msg.sender}-wrapper`}>
+                  {msg.sender === 'bot' && (
+                    <div className="avatar" aria-hidden="true">
+                      <Bot size={16} />
+                    </div>
+                  )}
+                  <div className={`message ${msg.sender}-message ${msg.error ? 'error' : ''}`}>
+                    {msg.sender === 'bot' ? (
+                      <div className="markdown"><Markdown remarkPlugins={[remarkGfm]}>{msg.text}</Markdown></div>
+                    ) : msg.text}
+                    {msg.sender === 'bot' && !msg.error && idx > 0 && (
+                      <div className="message-meta">
+                        <div className="msg-actions">
+                          <CopyButton text={msg.text} />
+                          {(msg.prompt || msg.timings?.length > 0) && (
+                            <button
+                              className="msg-action details-toggle"
+                              onClick={() => setOpenDetailsIdx(openDetailsIdx === idx ? null : idx)}
+                              aria-expanded={openDetailsIdx === idx}
+                            >
+                              <ChevronRight size={14} />
+                              Details
+                              {msg.total_ms != null && <span className="msg-time">{(msg.total_ms / 1000).toFixed(1)}s</span>}
+                            </button>
+                          )}
+                        </div>
+                        {openDetailsIdx === idx && (
+                          <div className="details-panel">
+                            {msg.timings?.length > 0 && <TimingBar timings={msg.timings} total={msg.total_ms} />}
+                            {msg.prompt && (
+                              <>
+                                <div className="section-label">Prompt sent to model</div>
+                                <pre className="prompt-view">{msg.prompt}</pre>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {isLoading && (
+                <div className="message-wrapper bot-wrapper">
                   <div className="avatar" aria-hidden="true">
                     <Bot size={16} />
                   </div>
-                )}
-                <div className={`message ${msg.sender}-message`}>
-                  {msg.text}
-                  {(msg.prompt || msg.timings?.length > 0) && (
-                    <div className="message-meta">
-                      {msg.prompt && (
-                        <button
-                          className="prompt-toggle"
-                          onClick={() => setOpenPromptIdx(openPromptIdx === idx ? null : idx)}
-                          aria-expanded={openPromptIdx === idx}
-                        >
-                          <ChevronRight size={14} />
-                          {openPromptIdx === idx ? 'Hide prompt' : 'Show prompt sent to model'}
-                        </button>
-                      )}
-                      {openPromptIdx === idx && <pre className="prompt-view">{msg.prompt}</pre>}
-                      {msg.timings?.length > 0 && <TimingBar timings={msg.timings} total={msg.total_ms} />}
-                    </div>
-                  )}
+                  <div className="typing" role="status" aria-label="Assistant is thinking">
+                    <span /><span /><span />
+                  </div>
                 </div>
-              </div>
-            ))}
-            {isLoading && (
-              <div className="message-wrapper bot-wrapper">
-                <div className="avatar" aria-hidden="true">
-                  <Bot size={16} />
-                </div>
-                <div className="typing" role="status" aria-label="Assistant is thinking">
-                  <span /><span /><span />
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </main>
 
         <footer className="chat-input-area">
           <div className="input-wrapper">
             <textarea
+              ref={textareaRef}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyPress}
               placeholder="Ask about your documents..."
               aria-label="Message"
               autoComplete="off"
+              autoFocus
               rows={1}
             />
             <div className="input-row">
@@ -364,8 +441,8 @@ function App() {
               )}
               <button
                 className="send-btn"
-                onClick={sendMessage}
-                disabled={!inputValue.trim() && !selectedFile}
+                onClick={() => sendMessage()}
+                disabled={isLoading || (!inputValue.trim() && !selectedFile)}
                 aria-label="Send message"
               >
                 <ArrowUp size={18} />
@@ -375,6 +452,12 @@ function App() {
           <p className="input-hint"><kbd>Enter</kbd> to send · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line</p>
         </footer>
       </div>
+
+      {chatToDelete && (
+        <ConfirmDialog title="Delete conversation?" onConfirm={() => deleteChat(chatToDelete.id)} onCancel={() => setChatToDelete(null)}>
+          <strong>{chatToDelete.name}</strong> will be permanently removed. This can't be undone.
+        </ConfirmDialog>
+      )}
     </div>
   );
 }
