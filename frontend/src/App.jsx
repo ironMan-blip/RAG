@@ -6,12 +6,6 @@ import remarkGfm from 'remark-gfm';
 import { API_BASE } from './api';
 import ConfirmDialog from './ConfirmDialog';
 
-const SUGGESTIONS = [
-  'Summarize the documents in my library',
-  'What topics do my documents cover?',
-  'Find the key dates and deadlines mentioned',
-];
-
 // One segment per backend pipeline step, width proportional to its time
 function TimingBar({ timings, total }) {
   return (
@@ -59,6 +53,7 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [openDetailsIdx, setOpenDetailsIdx] = useState(null);
   const [chatToDelete, setChatToDelete] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
 
   const modelDropdownRef = useRef(null);
   const textareaRef = useRef(null);
@@ -94,6 +89,7 @@ function App() {
       .then(data => {
         setChatId(data.session_id);
         setMessages(data.history);
+        setSuggestions(data.suggestions);
         setOpenDetailsIdx(null);
       })
       .catch(err => console.error("Failed to start chat:", err));
@@ -331,7 +327,7 @@ function App() {
               <h2>What would you like to know?</h2>
               <p>Ask a question and the assistant answers from the documents in your library. Attach a file to ask about it directly.</p>
               <div className="suggestions">
-                {SUGGESTIONS.map(s => (
+                {suggestions.map(s => (
                   <button key={s} className="suggestion" onClick={() => sendMessage(s)}>
                     {s}
                     <ArrowUp size={14} />
@@ -368,7 +364,7 @@ function App() {
                             >
                               <ChevronRight size={14} />
                               Details
-                              {msg.total_ms != null && <span className="msg-time">{(msg.total_ms / 1000).toFixed(1)}s</span>}
+                              {msg.total_text && <span className="msg-time">{msg.total_text}</span>}
                             </button>
                           )}
                         </div>

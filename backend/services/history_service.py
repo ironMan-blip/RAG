@@ -7,6 +7,12 @@ from core.database import db_cursor
 logger = logging.getLogger(__name__)
 
 GREETING = {"sender": "bot", "text": "Hello! I'm your AI assistant. How can I help you today?"}
+# Starter prompts shown on a chat that has no user turn yet
+SUGGESTIONS = [
+    "Summarize the documents in my library",
+    "What topics do my documents cover?",
+    "Find the key dates and deadlines mentioned",
+]
 
 
 def get_recent_chat_history(session_id: str, limit: int = 5) -> list[tuple[str, str]]:

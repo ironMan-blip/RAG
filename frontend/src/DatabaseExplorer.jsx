@@ -7,6 +7,7 @@ import ConfirmDialog from './ConfirmDialog';
 export default function DatabaseExplorer() {
   const navigate = useNavigate();
   const [documents, setDocuments] = useState([]);
+  const [countText, setCountText] = useState('');
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [search, setSearch] = useState('');
 
@@ -106,6 +107,7 @@ export default function DatabaseExplorer() {
       if (res.ok) {
         const data = await res.json();
         setDocuments(data.documents || []);
+        setCountText(data.count_text);
       }
     } catch (error) {
       console.error("Failed to fetch documents", error);
@@ -240,7 +242,7 @@ export default function DatabaseExplorer() {
         </button>
         <h1>Library</h1>
         {!loadingDocs && (
-          <span className="explorer-count">{documents.length} {documents.length === 1 ? 'document' : 'documents'}</span>
+          <span className="explorer-count">{countText}</span>
         )}
         <div className="explorer-actions">
           <input type="file" multiple ref={uploadInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />

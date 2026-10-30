@@ -57,7 +57,9 @@ async def get_upload_sources():
 
 @router.get("/documents")
 async def get_all_documents(q: str = ""):
-    return {"documents": await run_in_threadpool(document_service.get_all_documents, q)}
+    documents = await run_in_threadpool(document_service.get_all_documents, q)
+    count_text = f"{len(documents)} document{'' if len(documents) == 1 else 's'}"
+    return {"documents": documents, "count_text": count_text}
 
 
 @router.delete("/documents/{doc_id}")
