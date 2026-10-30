@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from fastapi.concurrency import run_in_threadpool
 
 from models.schemas import NewChatResponse
-from services.history_service import GREETING, delete_chat_by_id, get_all_chats, get_full_chat_history
+from services.history_service import GREETING, SUGGESTIONS, delete_chat_by_id, get_all_chats, get_full_chat_history
 
 router = APIRouter()
 
@@ -12,7 +12,7 @@ router = APIRouter()
 @router.post("/chats", response_model=NewChatResponse)
 async def new_chat_endpoint():
     # Nothing is stored until the first message; the chat row is created with it
-    return NewChatResponse(session_id=str(uuid.uuid4()), history=[GREETING])
+    return NewChatResponse(session_id=str(uuid.uuid4()), history=[GREETING], suggestions=SUGGESTIONS)
 
 
 @router.get("/chats")

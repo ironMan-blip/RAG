@@ -8,17 +8,16 @@ from fastapi.responses import JSONResponse
 from api.routers.chat import router as chat_router
 from api.routers.chats import router as chats_router
 from api.routers.documents import router as documents_router
-from services import document_service, upload_jobs
+from services import ingest_service, upload_jobs
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        document_service.resume_uploads()
+        ingest_service.resume_uploads()
     except Exception:
         logger.exception("Could not resume unfinished uploads")
     yield

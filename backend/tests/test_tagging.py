@@ -85,6 +85,11 @@ class PersistentRun(unittest.TestCase):
         self.assertEqual(sorted(c.args for c in on_success.call_args_list),
                          [(0, {"text": "a"}), (1, {"text": "b"}), (2, {"text": "c"})])
 
+    def test_gives_up_after_max_attempts_and_keeps_the_rest(self, sleep):
+        chain = ScriptedChain({"b": [openai.APIConnectionError(request=REQUEST)] * 100})
+        self.assertEqual(_run(chain, ["a", "b"], persist=True, max_attempts=3), [{"text": "a"}, None])
+        self.assertEqual(len(chain.configs), 3)
+
     def test_single_shot_without_persist(self, sleep):
         chain = ScriptedChain({"a": [OutputParserException("bad json")]})
         self.assertEqual(_run(chain, ["a"]), [None])

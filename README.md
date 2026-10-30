@@ -26,6 +26,7 @@ config:
     rankSpacing: 55
 ---
 flowchart TB
+  subgraph canvas[" "]
     subgraph add["&nbsp;&nbsp;&nbsp;<b>① INGESTION</b> · POST /upload&nbsp;&nbsp;&nbsp;"]
         direction LR
         A1(["📄 <b>File upload</b><br/>Library / Tools / Chat"])
@@ -33,18 +34,18 @@ flowchart TB
         A2{"SHA-256<br/>unchanged?"}
         A3(["⏭️ Skip"])
         A4["✂️ <b>Chunking</b><br/>Docling + Tesseract OCR<br/>paragraph / list / table"]
-        A5["🏷️ <b>Tagging</b> · qwen3:4b<br/>chunk tags + summaries<br/>doc metadata"]
+        A5["🏷️ <b>Tagging</b> · qwen3:4b<br/>chunk tags (Tools docs only)<br/>summaries · doc metadata"]
         A6["🧭 <b>Embedding</b><br/>Qwen3-Embedding-0.6B<br/>1024-d vectors"]
         A1 --> J1 --> A2
         A2 -- yes --> A3
         A2 -- no --> A4 --> A5 --> A6
     end
 
-    KB[("🗄️ <b>PostgreSQL + pgvector</b><br/>documents · chunks<br/>tags · vectors · summaries<br/>upload_jobs")]
+    KB[("🗄️ <b>PostgreSQL + pgvector</b><br/>documents · chunks<br/>tags · vectors · summaries<br/>status: uploading / ready")]
 
     subgraph ask["&nbsp;&nbsp;&nbsp;<b>② CHAT</b> · POST /chat&nbsp;&nbsp;&nbsp;"]
         direction LR
-        Q1(["💬 <b>User message</b><br/>+ last 5 turns"])
+        Q1(["💬 <b>User message</b><br/>+ last 5 turns<br/>starter suggestions on new chat"])
         Q2{"File<br/>attached?"}
         Q3{"<b>Jev</b><br/>OpenRouter<br/>needs context?"}
         Q4["📎 Scope:<br/>attached file"]
@@ -52,7 +53,7 @@ flowchart TB
         Q6["🔎 <b>Phase 1</b> · doc filter<br/>qwen3:4b query profile<br/>top 10 docs by metadata"]
         Q7["🎯 <b>Phase 2</b> · vector search<br/>cosine sim ≥ 0.7<br/>min 3 chunks"]
         Q8["🤖 <b>LLM</b> · Ollama<br/>qwen3:4b default<br/>excerpts + history prompt"]
-        Q9(["✨ <b>Reply</b><br/>history + title saved"])
+        Q9(["✨ <b>Reply</b><br/>history + title saved<br/>total time shown"])
         Q1 --> Q2
         Q2 -- yes --> Q4
         Q2 -- no --> Q3
@@ -70,6 +71,7 @@ flowchart TB
     add == store ==> KB
     KB == retrieve ==> ask
     ask ~~~ legend
+  end
 
     classDef io fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d
     classDef step fill:#ffffff,stroke:#94a3b8,stroke-width:1.5px,color:#0f172a
@@ -86,6 +88,7 @@ flowchart TB
     class A3 skip
     style add fill:#f8fafc,stroke:#cbd5e1,stroke-width:1.5px,color:#334155
     style ask fill:#f8fafc,stroke:#cbd5e1,stroke-width:1.5px,color:#334155
+    style canvas fill:#ffffff,stroke:#ffffff
     style legend fill:#ffffff,stroke:#e2e8f0,stroke-width:1px,color:#64748b
 ```
 

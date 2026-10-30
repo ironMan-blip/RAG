@@ -14,6 +14,11 @@ class ChatMessage(BaseModel):
     def total_ms(self) -> Optional[int]:
         return sum(t["ms"] for t in self.timings) if self.timings else None
 
+    @computed_field
+    @property
+    def total_text(self) -> Optional[str]:
+        return f"{self.total_ms / 1000:.1f}s" if self.total_ms is not None else None
+
 
 class ChatResponse(BaseModel):
     session_id: str
@@ -24,3 +29,4 @@ class ChatResponse(BaseModel):
 class NewChatResponse(BaseModel):
     session_id: str
     history: list[ChatMessage]
+    suggestions: list[str] = []  # starter prompts, only for a new chat

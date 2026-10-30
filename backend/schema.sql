@@ -18,7 +18,10 @@ CREATE TABLE IF NOT EXISTS documents (
     file_hash VARCHAR(255),
     source_id VARCHAR(255) REFERENCES source(uuid),
     session_id VARCHAR(255),
-    metadata JSONB -- year, grade, subject, topic, subtopic
+    metadata JSONB, -- year, grade, subject, topic, subtopic
+    -- 'uploading' while processing (hidden from search and the Library), 'ready' once saved
+    status VARCHAR(20) NOT NULL DEFAULT 'ready' CHECK (status IN ('uploading', 'ready')),
+    content BYTEA -- the uploaded file, kept while uploading so a restart can resume; NULL once ready
 );
 
 CREATE TABLE IF NOT EXISTS chunks (
@@ -28,8 +31,20 @@ CREATE TABLE IF NOT EXISTS chunks (
     -- Dimension must match core/ml.py's embedder
     chunk_embedding vector(1024),
     metadata JSONB,
-    previous_summary TEXT -- summary of the preceding chunk (replaces chunk overlap)
+    previous_summary TEXT, -- summary of the preceding chunk (replaces chunk overlap)
+    -- 'incomplete' while its tags/summary are still being generated (kept in metadata as each finishes), 'complete'
+    -- once they are; a restart resumes incomplete chunks. Embedded when the whole document is saved.
+    -- 'unfinished': saved, but its tags or previous summary failed every try; regenerated manually from the Library.
+    status VARCHAR(20) NOT NULL DEFAULT 'complete' CHECK (status IN ('incomplete', 'complete', 'unfinished'))
 );
+
+-- Databases created before the status columns: add them, and drop the old in-progress uploads table
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'ready'
+    CHECK (status IN ('uploading', 'ready'));
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS content BYTEA;
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'complete'
+    CHECK (status IN ('incomplete', 'complete', 'unfinished'));
+DROP TABLE IF EXISTS upload_jobs;
 
 CREATE INDEX IF NOT EXISTS chunks_doc_id_idx ON chunks (doc_id);
 -- Approximate nearest-neighbour search for ORDER BY chunk_embedding <=> q LIMIT k; cosine ops to match
@@ -50,21 +65,6 @@ CREATE TABLE IF NOT EXISTS chat_history (
     model TEXT,
     prompt TEXT, -- full prompt (system + user) sent to the LLM for this turn
     timings JSONB, -- [{"step", "ms"}] per pipeline step, in order; for finding slow steps
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Uploads still processing: the file plus every result finished so far, so a restart resumes instead of
--- starting over. A row is deleted when its document is saved (or processing fails).
-CREATE TABLE IF NOT EXISTS upload_jobs (
-    id VARCHAR(255) PRIMARY KEY,
-    filename VARCHAR(255) NOT NULL,
-    source VARCHAR(255) NOT NULL, -- 'library' or 'tools'
-    content BYTEA NOT NULL,
-    content_type VARCHAR(255),
-    chunks JSONB, -- extracted chunks; NULL until extraction finishes
-    doc_metadata JSONB, -- tools only
-    tags JSONB, -- per chunk, null entries not generated yet
-    summaries JSONB, -- per chunk, null entries not generated yet
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

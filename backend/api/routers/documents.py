@@ -1,7 +1,8 @@
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
-from services import chunk_service, document_service, upload_jobs
+from core.sources import SOURCE_IDS
+from services import chunk_service, document_service, ingest_service, upload_jobs
 
 router = APIRouter()
 
@@ -10,36 +11,41 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 @router.post("/upload", status_code=202)
 async def upload_file(file: UploadFile = File(...), source: str = Form('library')):
-    if source not in document_service.SOURCE_IDS:
+    if source not in SOURCE_IDS:
         raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
     # Starlette spools the body to disk, so size is known before reading it into memory
     if file.size is None or file.size > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail=f"{file.filename} is larger than the 50 MB limit.")
-    return {"upload": document_service.start_upload(file.filename, await file.read(), file.content_type, source)}
+    try:
+        upload = await run_in_threadpool(ingest_service.start_upload, file.filename, await file.read(),
+                                         file.content_type, source)
+    except ingest_service.UploadInProgress as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"upload": upload}
 
 
 @router.get("/uploads")
 async def get_uploads():
-    return {"uploads": document_service.list_uploads()}
+    return {"uploads": ingest_service.list_uploads()}
 
 
 @router.delete("/uploads/{job_id}")
-async def cancel_upload(job_id: str):
+async def cancel_upload(job_id: int):
     if not await run_in_threadpool(upload_jobs.cancel, job_id):
         raise HTTPException(status_code=404, detail="Upload not found")
     return {"status": "success", "message": "Upload cancelled"}
 
 
 @router.post("/uploads/{job_id}/pause")
-async def pause_upload(job_id: str):
-    if not document_service.pause_upload(job_id):
+async def pause_upload(job_id: int):
+    if not ingest_service.pause_upload(job_id):
         raise HTTPException(status_code=404, detail="Upload not found")
     return {"status": "success", "message": "Upload pausing"}
 
 
 @router.post("/uploads/{job_id}/resume")
-async def resume_upload(job_id: str):
-    error = document_service.resume_upload(job_id)
+async def resume_upload(job_id: int):
+    error = ingest_service.resume_upload(job_id)
     if error:
         raise HTTPException(status_code=404 if error == "Upload not found" else 409, detail=error)
     return {"status": "success", "message": "Upload resumed"}
@@ -52,7 +58,9 @@ async def get_upload_sources():
 
 @router.get("/documents")
 async def get_all_documents(q: str = ""):
-    return {"documents": await run_in_threadpool(document_service.get_all_documents, q)}
+    documents = await run_in_threadpool(document_service.get_all_documents, q)
+    count_text = f"{len(documents)} document{'' if len(documents) == 1 else 's'}"
+    return {"documents": documents, "count_text": count_text}
 
 
 @router.delete("/documents/{doc_id}")
