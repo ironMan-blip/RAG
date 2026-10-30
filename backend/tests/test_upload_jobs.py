@@ -3,7 +3,7 @@ import threading
 import unittest
 from unittest import mock
 
-from services import document_service, upload_jobs
+from services import ingest_service, upload_jobs
 from services.upload_jobs import UploadJob
 
 
@@ -45,14 +45,14 @@ class Resume(unittest.TestCase):
     def test_only_missing_results_are_generated(self):
         job = resumed_tools_job()
         generate = mock.Mock(side_effect=lambda texts, on_result: on_result(0, ["new"] * 10))
-        document_service._fill_missing(job.tags, ["x", "y"], generate, job.set_tags)
+        ingest_service._fill_missing(job.tags, ["x", "y"], generate, job.set_tags)
         generate.assert_called_once()
         self.assertEqual(generate.call_args.args[0], ["y"])
         self.assertEqual(job.tags[1], ["new"] * 10)
 
     def test_nothing_generated_when_all_saved(self):
         generate = mock.Mock()
-        document_service._fill_missing(["a", "b"], ["x", "y"], generate, None)
+        ingest_service._fill_missing(["a", "b"], ["x", "y"], generate, None)
         generate.assert_not_called()
 
 
@@ -134,12 +134,12 @@ class Pause(unittest.TestCase):
         job = UploadJob("a.pdf", "library", id="p1", chunks=[{"text": "x"}], tags=[None], summaries=[None])
         upload_jobs._jobs["p1"] = job
         try:
-            self.assertTrue(document_service.pause_upload("p1"))
+            self.assertTrue(ingest_service.pause_upload("p1"))
             with self.assertRaises(upload_jobs.Cancelled):
                 job.set_summary(0, "s")
             self.assertTrue(job.to_dict()["stopped"])
-            with mock.patch.object(document_service, "_process_in_background") as start:
-                self.assertIsNone(document_service.resume_upload("p1"))
+            with mock.patch.object(ingest_service, "_process_in_background") as start:
+                self.assertIsNone(ingest_service.resume_upload("p1"))
             start.assert_called_once_with(job)
             self.assertFalse(job.paused)
         finally:

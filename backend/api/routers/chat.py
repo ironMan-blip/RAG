@@ -4,9 +4,10 @@ from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
 from core.config import settings
-from models.schemas import ChatResponse
-from services.document_service import SOURCE_IDS, process_and_save_document
+from core.sources import SOURCE_IDS
 from core.timing import timed
+from models.schemas import ChatResponse
+from services.ingest_service import process_and_save_document
 from services.llm_service import get_chat_completion
 
 router = APIRouter()

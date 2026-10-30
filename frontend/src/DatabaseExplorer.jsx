@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Trash2, AlertTriangle, Upload, LayoutList, Search, ChevronRight, RefreshCw, X, Inbox, Pause, Play } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Upload, Search, X, Inbox } from 'lucide-react';
 import { API_BASE } from './api';
-import ConfirmDialog from './ConfirmDialog';
+import ConfirmDialog from './components/ConfirmDialog';
+import DocumentCard from './components/DocumentCard';
+import UploadCard from './components/UploadCard';
 
 export default function DatabaseExplorer() {
   const navigate = useNavigate();
@@ -154,12 +156,6 @@ export default function DatabaseExplorer() {
     }
   };
 
-  const regenerateButton = (isRegenerating, onClick, label) => (
-    <button className="icon-btn" onClick={onClick} disabled={isRegenerating} title={label} aria-label={label}>
-      <RefreshCw size={14} className={isRegenerating ? 'spinning' : undefined} />
-    </button>
-  );
-
   const toggleDocument = (docId) => {
     setExpandedChunkId(null);
     if (expandedDocId === docId) {
@@ -285,72 +281,14 @@ export default function DatabaseExplorer() {
 
         <div className="explorer-list">
           {visibleUploads.map(u => (
-              <article key={u.id} className="doc-card upload-card">
-                <div className="doc-row">
-                  <div className="doc-toggle">
-                    <span className={`doc-icon ${u.error ? 'failed' : ''}`}>
-                      {u.error ? <AlertTriangle size={18} /> : serverDown || u.paused ? <Pause size={18} /> : <RefreshCw size={18} className="spinning" />}
-                    </span>
-                    <span style={{ minWidth: 0, flex: 1 }}>
-                      <div className="doc-name" title={u.filename}>{u.filename}</div>
-                      {u.error ? (
-                        <div className="upload-status failed">{u.error}</div>
-                      ) : (
-                        <>
-                          <div className="upload-status">
-                            <span>
-                              <span className="source-dot" style={{ background: u.color }} aria-hidden="true" />
-                              {serverDown ? 'Paused, waiting for the server' : u.status_text}
-                            </span>
-                            <span>{serverDown ? '' : u.eta_text}</span>
-                          </div>
-                          <div
-                            className={`upload-progress ${serverDown || u.paused ? 'paused' : ''}`}
-                            role="progressbar"
-                            aria-label={`Processing ${u.filename}`}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-valuenow={u.percent ?? undefined}
-                          >
-                            <span className={u.percent == null ? 'indeterminate' : undefined} style={u.percent == null ? undefined : { width: `${u.percent}%` }} />
-                          </div>
-                        </>
-                      )}
-                    </span>
-                  </div>
-                  {u.error && (
-                    <button
-                      className="icon-btn"
-                      onClick={() => setDismissedUploadIds(prev => new Set(prev).add(u.id))}
-                      aria-label={`Dismiss ${u.filename}`}
-                      title="Dismiss"
-                    >
-                      <X size={16} />
-                    </button>
-                  )}
-                  {!u.error && !serverDown && (
-                    <button
-                      className="icon-btn"
-                      onClick={() => setUploadPaused(u, !u.paused)}
-                      disabled={u.paused && !u.stopped}
-                      aria-label={`${u.paused ? 'Resume' : 'Pause'} upload of ${u.filename}`}
-                      title={u.paused ? 'Resume upload' : 'Pause upload'}
-                    >
-                      {u.paused ? <Play size={16} /> : <Pause size={16} />}
-                    </button>
-                  )}
-                  {!u.error && !serverDown && (
-                    <button
-                      className="icon-btn"
-                      onClick={() => cancelUpload(u)}
-                      aria-label={`Stop and delete upload of ${u.filename}`}
-                      title="Stop and delete upload"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-              </article>
+            <UploadCard
+              key={u.id}
+              upload={u}
+              serverDown={serverDown}
+              onDismiss={() => setDismissedUploadIds(prev => new Set(prev).add(u.id))}
+              onTogglePause={() => setUploadPaused(u, !u.paused)}
+              onCancel={() => cancelUpload(u)}
+            />
           ))}
           {loadingDocs ? (
             <div aria-label="Loading documents" role="status">
@@ -365,84 +303,20 @@ export default function DatabaseExplorer() {
                 <><strong>No documents yet</strong>Upload a file to make it searchable in chat.</>
               )}
             </div>
-          ) : documents.map(doc => {
-            const isExpanded = expandedDocId === doc.id;
-            const chunks = chunksByDoc[doc.id];
-            return (
-              <article key={doc.id} className={`doc-card ${isExpanded ? 'expanded' : ''} ${doc.unfinished_text ? 'unfinished' : ''}`}>
-                <div className="doc-row">
-                  <button className="doc-toggle" onClick={() => toggleDocument(doc.id)} aria-expanded={isExpanded}>
-                    <ChevronRight size={16} />
-                    <span className="doc-icon"><FileText size={18} /></span>
-                    <span style={{ minWidth: 0 }}>
-                      <div className="doc-name" title={doc.filename}>{doc.filename}</div>
-                      <span className="tag" style={{ background: doc.tag_bg_color, color: doc.tag_text_color }}>
-                        {doc.tag_label}
-                      </span>
-                    </span>
-                  </button>
-                  <button className="icon-btn danger" onClick={() => setDocumentToDelete(doc)} title="Delete document" aria-label={`Delete ${doc.filename}`}>
-                    <Trash2 size={17} />
-                  </button>
-                </div>
-
-                {isExpanded && (
-                  <div className="doc-detail">
-                    {doc.unfinished_text && <p className="detail-note unfinished">{doc.unfinished_text}</p>}
-                    <div className="section-label">Metadata</div>
-                    <pre className="meta-block">{doc.metadata_text}</pre>
-                    <div className="section-label">Chunks{Array.isArray(chunks) && ` (${chunks.length})`}</div>
-                    {chunks == null ? (
-                      <p className="detail-note">Loading chunks...</p>
-                    ) : chunks === 'error' ? (
-                      <p className="detail-note error">Couldn't load chunks. Collapse and expand to retry.</p>
-                    ) : chunks.length === 0 ? (
-                      <p className="detail-note">This document has no chunks.</p>
-                    ) : (
-                      <div className="chunk-list">
-                        {chunks.map(chunk => {
-                          const isChunkExpanded = expandedChunkId === chunk.chunk_id;
-                          const isRegeneratingTags = regeneratingChunkIds.has(`${chunk.chunk_id}:tags`);
-                          const isRegeneratingSummary = regeneratingChunkIds.has(`${chunk.chunk_id}:previous-summary`);
-                          return (
-                            <div key={chunk.chunk_id} className={`chunk-card ${chunk.unfinished_text ? 'unfinished' : ''}`}>
-                              <button
-                                className="chunk-toggle"
-                                onClick={() => setExpandedChunkId(isChunkExpanded ? null : chunk.chunk_id)}
-                                aria-expanded={isChunkExpanded}
-                              >
-                                <ChevronRight size={14} />
-                                <LayoutList size={15} />
-                                {chunk.label}
-                              </button>
-                              {isChunkExpanded && (
-                                <>
-                                  {chunk.unfinished_text && <p className="detail-note unfinished">{chunk.unfinished_text}</p>}
-                                  <div className="chunk-section meta">
-                                    {regenerateButton(isRegeneratingTags, () => regenerate(doc.id, chunk.chunk_id, 'tags'), 'Regenerate tags')}
-                                    <pre>{chunk.metadata_text}</pre>
-                                  </div>
-                                  {chunk.previous_summary_text != null && (
-                                    <div className="chunk-section summary">
-                                      {regenerateButton(isRegeneratingSummary, () => regenerate(doc.id, chunk.chunk_id, 'previous-summary'), 'Regenerate summary')}
-                                      <pre>{chunk.previous_summary_text}</pre>
-                                    </div>
-                                  )}
-                                  <div className="chunk-section text">
-                                    <pre>{chunk.chunk_text}</pre>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </article>
-            );
-          })}
+          ) : documents.map(doc => (
+            <DocumentCard
+              key={doc.id}
+              doc={doc}
+              expanded={expandedDocId === doc.id}
+              chunks={chunksByDoc[doc.id]}
+              expandedChunkId={expandedChunkId}
+              regenerating={regeneratingChunkIds}
+              onToggle={() => toggleDocument(doc.id)}
+              onToggleChunk={setExpandedChunkId}
+              onRegenerate={(chunkId, kind) => regenerate(doc.id, chunkId, kind)}
+              onDelete={() => setDocumentToDelete(doc)}
+            />
+          ))}
         </div>
       </div>
 

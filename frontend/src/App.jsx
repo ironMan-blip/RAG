@@ -1,43 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Bot, Sparkles, Paperclip, X, Library, ChevronDown, ChevronRight, Check, Cpu, MessageSquarePlus, MessageSquare, Menu, Trash2, FileText, Copy } from 'lucide-react';
+import { ArrowUp, Sparkles, Paperclip, X, Library, Menu, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { API_BASE } from './api';
-import ConfirmDialog from './ConfirmDialog';
-
-// One segment per backend pipeline step, width proportional to its time
-function TimingBar({ timings, total }) {
-  return (
-    <div className="timing">
-      <div className="timing-bar" role="img" aria-label={`Reply took ${total} ms`}>
-        {timings.map((t, i) => (
-          <span key={i} className={`timing-seg seg-${i % 7}`} style={{ flexGrow: Math.max(t.ms, 1) }} title={`${t.step}: ${t.ms} ms`} />
-        ))}
-      </div>
-      <div className="timing-legend">
-        {timings.map((t, i) => (
-          <span key={i}><i className={`seg-${i % 7}`} />{t.step} {t.ms} ms</span>
-        ))}
-        <span className="timing-total">Total {total} ms</span>
-      </div>
-    </div>
-  )
-}
-
-function CopyButton({ text }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => navigator.clipboard.writeText(text).then(() => {
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  });
-  return (
-    <button className="msg-action" onClick={copy} aria-label="Copy reply">
-      {copied ? <Check size={14} /> : <Copy size={14} />}
-      {copied ? 'Copied' : 'Copy'}
-    </button>
-  );
-}
+import ChatMessage, { BotAvatar } from './components/ChatMessage';
+import ChatSidebar from './components/ChatSidebar';
+import ConfirmDialog from './components/ConfirmDialog';
+import ModelPicker from './components/ModelPicker';
 
 function App() {
   const navigate = useNavigate();
@@ -47,7 +15,6 @@ function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedModel, setSelectedModel] = useState("");
   const [availableModels, setAvailableModels] = useState([]);
-  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [chatId, setChatId] = useState(null);
   const [chatSessions, setChatSessions] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -55,30 +22,18 @@ function App() {
   const [chatToDelete, setChatToDelete] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
 
-  const modelDropdownRef = useRef(null);
   const textareaRef = useRef(null);
-
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target)) {
-        setIsModelDropdownOpen(false);
-      }
-    }
-    function handleEscape(event) {
-      if (event.key !== 'Escape') return;
-      setIsModelDropdownOpen(false);
-      setIsSidebarOpen(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, []);
-
   const chatBoxRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  const fetchChatSessions = () => {
+    fetch(`${API_BASE}/chats`, { cache: 'no-store' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.chats) setChatSessions(data.chats);
+      })
+      .catch(err => console.error("Failed to fetch chats:", err));
+  };
 
   const startNewChat = () => {
     setInputValue("");
@@ -95,32 +50,15 @@ function App() {
       .catch(err => console.error("Failed to start chat:", err));
   };
 
-  const handleFileSelect = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    setSelectedFile(file);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-    textareaRef.current?.focus();
-  };
-
-  const scrollToBottom = () => {
-    if (chatBoxRef.current) {
-      chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
-    }
-  };
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') setIsSidebarOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     fetchChatSessions();
     startNewChat();
-  }, []);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
-
-  useEffect(() => {
     fetch(`${API_BASE}/models`)
       .then(res => res.json())
       .then(data => {
@@ -130,14 +68,18 @@ function App() {
       .catch(err => console.error("Failed to fetch models:", err));
   }, []);
 
+  useEffect(() => {
+    if (chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
+  }, [messages, isLoading]);
 
-  const fetchChatSessions = () => {
-    fetch(`${API_BASE}/chats`, { cache: 'no-store' })
-      .then(res => res.json())
-      .then(data => {
-        if (data.chats) setChatSessions(data.chats);
-      })
-      .catch(err => console.error("Failed to fetch chats:", err));
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    setSelectedFile(file);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    textareaRef.current?.focus();
   };
 
   const loadChat = (id) => {
@@ -183,12 +125,8 @@ function App() {
       if (chatId) formData.append('session_id', chatId);
       if (fileToUpload) formData.append('file', fileToUpload);
 
-      const response = await fetch(`${API_BASE}/chat`, {
-        method: 'POST',
-        // Note: Do not set Content-Type header when using FormData,
-        // the browser will automatically set it to multipart/form-data with boundary
-        body: formData
-      });
+      // No Content-Type header: the browser sets multipart/form-data with its boundary
+      const response = await fetch(`${API_BASE}/chat`, { method: 'POST', body: formData });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -223,48 +161,15 @@ function App() {
 
   return (
     <div className="app-wrapper">
-      <div className={`sidebar-backdrop ${isSidebarOpen ? 'open' : ''}`} onClick={() => setIsSidebarOpen(false)} />
-
-      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`} aria-label="Chat history">
-        <div className="sidebar-header">
-          <div className="brand">
-            <span className="brand-mark"><Sparkles size={16} /></span>
-            Knowledge Assistant
-          </div>
-          <button onClick={() => setIsSidebarOpen(false)} className="icon-btn menu-btn" aria-label="Close sidebar">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="sidebar-content">
-          <button onClick={() => { startNewChat(); setIsSidebarOpen(false); }} className="btn new-chat-btn">
-            <MessageSquarePlus size={16} />
-            New chat
-          </button>
-          <div className="sidebar-label">Recent</div>
-          {chatSessions.length === 0 ? (
-            <p className="sidebar-empty">Your conversations will appear here.</p>
-          ) : (
-            <ul className="chat-list">
-              {chatSessions.map(session => (
-                <li key={session.id} className={`chat-list-item ${session.id === chatId ? 'active' : ''}`}>
-                  <button
-                    className="chat-open-btn"
-                    onClick={() => loadChat(session.id)}
-                    aria-current={session.id === chatId ? 'true' : undefined}
-                    title={session.name}
-                  >
-                    <MessageSquare size={15} />
-                    <span>{session.name}</span>
-                  </button>
-                  <button className="icon-btn danger" onClick={() => setChatToDelete(session)} aria-label={`Delete ${session.name}`} title="Delete chat">
-                    <Trash2 size={14} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </aside>
+      <ChatSidebar
+        open={isSidebarOpen}
+        sessions={chatSessions}
+        activeId={chatId}
+        onClose={() => setIsSidebarOpen(false)}
+        onNewChat={() => { startNewChat(); setIsSidebarOpen(false); }}
+        onOpenChat={loadChat}
+        onDeleteChat={setChatToDelete}
+      />
 
       <div className="chat-container">
         <header className="chat-header">
@@ -274,45 +179,7 @@ function App() {
           </button>
           <h1 className="chat-title">{currentTitle}</h1>
           <div className="header-actions">
-            <div className="custom-dropdown" ref={modelDropdownRef}>
-              <button
-                className="btn dropdown-trigger"
-                onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-                aria-haspopup="listbox"
-                aria-expanded={isModelDropdownOpen}
-                aria-label="Select model"
-              >
-                <Cpu size={15} />
-                <span className="dropdown-label">
-                  {availableModels.find(m => m.value === selectedModel)?.label || 'Select model'}
-                </span>
-                <ChevronDown size={15} className={`dropdown-arrow ${isModelDropdownOpen ? 'open' : ''}`} />
-              </button>
-
-              {isModelDropdownOpen && (
-                <div className="dropdown-menu">
-                  <div className="dropdown-header">Model</div>
-                  <div className="dropdown-list" role="listbox">
-                    {availableModels.length === 0 && <p className="dropdown-empty">No models available. Check that Ollama is running.</p>}
-                    {availableModels.map(model => (
-                      <button
-                        key={model.value}
-                        role="option"
-                        aria-selected={selectedModel === model.value}
-                        className={`dropdown-item ${selectedModel === model.value ? 'selected' : ''}`}
-                        onClick={() => {
-                          setSelectedModel(model.value);
-                          setIsModelDropdownOpen(false);
-                        }}
-                      >
-                        <span className="item-label">{model.label}</span>
-                        {selectedModel === model.value && <Check size={16} className="check-icon" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <ModelPicker models={availableModels} value={selectedModel} onChange={setSelectedModel} />
             <button className="btn" onClick={() => navigate('/admin')} title="Browse indexed documents">
               <Library size={15} />
               <span className="btn-label">Library</span>
@@ -342,53 +209,17 @@ function App() {
           ) : (
             <div className="chat-thread" aria-live="polite">
               {messages.map((msg, idx) => (
-                <div key={idx} className={`message-wrapper ${msg.sender}-wrapper`}>
-                  {msg.sender === 'bot' && (
-                    <div className="avatar" aria-hidden="true">
-                      <Bot size={16} />
-                    </div>
-                  )}
-                  <div className={`message ${msg.sender}-message ${msg.error ? 'error' : ''}`}>
-                    {msg.sender === 'bot' ? (
-                      <div className="markdown"><Markdown remarkPlugins={[remarkGfm]}>{msg.text}</Markdown></div>
-                    ) : msg.text}
-                    {msg.sender === 'bot' && !msg.error && idx > 0 && (
-                      <div className="message-meta">
-                        <div className="msg-actions">
-                          <CopyButton text={msg.text} />
-                          {(msg.prompt || msg.timings?.length > 0) && (
-                            <button
-                              className="msg-action details-toggle"
-                              onClick={() => setOpenDetailsIdx(openDetailsIdx === idx ? null : idx)}
-                              aria-expanded={openDetailsIdx === idx}
-                            >
-                              <ChevronRight size={14} />
-                              Details
-                              {msg.total_text && <span className="msg-time">{msg.total_text}</span>}
-                            </button>
-                          )}
-                        </div>
-                        {openDetailsIdx === idx && (
-                          <div className="details-panel">
-                            {msg.timings?.length > 0 && <TimingBar timings={msg.timings} total={msg.total_ms} />}
-                            {msg.prompt && (
-                              <>
-                                <div className="section-label">Prompt sent to model</div>
-                                <pre className="prompt-view">{msg.prompt}</pre>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <ChatMessage
+                  key={idx}
+                  msg={msg}
+                  showMeta={idx > 0}
+                  detailsOpen={openDetailsIdx === idx}
+                  onToggleDetails={() => setOpenDetailsIdx(openDetailsIdx === idx ? null : idx)}
+                />
               ))}
               {isLoading && (
                 <div className="message-wrapper bot-wrapper">
-                  <div className="avatar" aria-hidden="true">
-                    <Bot size={16} />
-                  </div>
+                  <BotAvatar />
                   <div className="typing" role="status" aria-label="Assistant is thinking">
                     <span /><span /><span />
                   </div>

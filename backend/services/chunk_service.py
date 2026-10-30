@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Optional
 
@@ -5,7 +6,7 @@ from psycopg2.extras import Json, execute_values
 
 from core.database import db_cursor
 from core.ml import embedder
-from services.display import format_metadata
+from core.sources import SOURCE_IDS
 from services.tagging_service import generate_chunk_summaries, generate_chunk_tags
 
 logger = logging.getLogger(__name__)
@@ -58,12 +59,6 @@ def replace_chunks(cur, doc_id: int, chunks: list[dict], embeddings: list[list[f
     _refresh_status(cur, doc_id)
 
 
-def _tools_source_id() -> str:
-    """Tools documents are the only ones tagged."""
-    from services.document_service import SOURCE_IDS  # here, not at the top: document_service imports this module
-    return SOURCE_IDS["tools"]
-
-
 def _refresh_status(cur, doc_id: int, chunk_id: Optional[int] = None):
     """Mark chunks 'unfinished' while missing tags (tools documents only) or, after the first chunk, the previous
     chunk's summary; both are regenerated from that chunk. 'complete' otherwise. chunk_id limits it to one chunk."""
@@ -76,7 +71,7 @@ def _refresh_status(cur, doc_id: int, chunk_id: Optional[int] = None):
            FROM documents d
            WHERE d.id = c.doc_id AND c.doc_id = %(doc_id)s
              AND (%(chunk_id)s::int IS NULL OR c.chunk_id = %(chunk_id)s)""",
-        {"tools": _tools_source_id(), "doc_id": doc_id, "chunk_id": chunk_id},
+        {"tools": SOURCE_IDS["tools"], "doc_id": doc_id, "chunk_id": chunk_id},
     )
 
 
@@ -86,14 +81,14 @@ def get_document_chunks(doc_id: int):
             """SELECT c.chunk_id, c.metadata, c.chunk_text, c.previous_summary, c.status, d.source_id = %s
                FROM chunks c JOIN documents d ON d.id = c.doc_id
                WHERE c.doc_id = %s ORDER BY c.chunk_id""",
-            (_tools_source_id(), doc_id),
+            (SOURCE_IDS["tools"], doc_id),
         )
         rows = cur.fetchall()
     return [
         {
             "chunk_id": chunk_id,
             "label": _label(position, metadata),
-            "metadata_text": format_metadata(metadata, _NO_METADATA),
+            "metadata_text": json.dumps(metadata, indent=2) if metadata else _NO_METADATA,
             "chunk_text": chunk_text,
             # The first chunk has no previous chunk to summarize
             "previous_summary_text": _summary_text(previous_summary) if position > 1 else None,
