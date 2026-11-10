@@ -37,13 +37,15 @@ class UploadJob:
     def __init__(self, filename: str, source: str, content: bytes = b"", content_type: Optional[str] = None,
                  id: Optional[int] = None, file_hash: Optional[str] = None, chunks: Optional[list] = None,
                  chunk_ids: Optional[list[int]] = None, doc_metadata: Optional[dict] = None,
-                 tags: Optional[list] = None, summaries: Optional[list] = None):
+                 tags: Optional[list] = None, summaries: Optional[list] = None,
+                 country: Optional[list[str]] = None):
         self.id = id
         self.filename = filename
         self.source = source
         self.content = content
         self.content_type = content_type
         self.file_hash = file_hash
+        self.country = country
         self.chunks = chunks  # None until extraction finishes
         self.chunk_ids = chunk_ids  # chunk row per chunk, tracked jobs only
         self.doc_metadata = doc_metadata
@@ -148,27 +150,27 @@ class UploadJob:
 
 
 def create(filename: str, source: str, source_id: str, content: bytes, content_type: Optional[str],
-           file_hash: str) -> Optional[UploadJob]:
+           file_hash: str, country: Optional[list[str]] = None) -> Optional[UploadJob]:
     """Register an upload as an 'uploading' document, replacing a saved one of that name.
 
     Returns None if a document of that name is already uploading.
     """
     with db_cursor() as cur:
         cur.execute(
-            """INSERT INTO documents (filename, file_hash, source_id, status, content)
-               VALUES (%s, %s, %s, 'uploading', %s)
+            """INSERT INTO documents (filename, file_hash, source_id, country, status, content)
+               VALUES (%s, %s, %s, %s, 'uploading', %s)
                ON CONFLICT (filename) DO UPDATE SET
                    file_hash = EXCLUDED.file_hash, source_id = EXCLUDED.source_id, session_id = NULL,
-                   metadata = NULL, status = 'uploading', content = EXCLUDED.content
+                   metadata = NULL, country = EXCLUDED.country, status = 'uploading', content = EXCLUDED.content
                WHERE documents.status = 'ready'
                RETURNING id""",
-            (filename, file_hash, source_id, content),
+            (filename, file_hash, source_id, country, content),
         )
         row = cur.fetchone()
         if row is None:
             return None
         cur.execute("DELETE FROM chunks WHERE doc_id = %s", (row[0],))
-    job = UploadJob(filename, source, content, content_type, id=row[0], file_hash=file_hash)
+    job = UploadJob(filename, source, content, content_type, id=row[0], file_hash=file_hash, country=country)
     with _lock:
         _jobs[job.id] = job
     return job
@@ -206,7 +208,7 @@ def load_unfinished(source_names: dict[str, str]) -> list[UploadJob]:
     extracting text and starts over from its stored file; complete chunks are kept, incomplete ones finished.
     """
     with db_cursor() as cur:
-        cur.execute("""SELECT id, filename, file_hash, source_id, metadata, content FROM documents
+        cur.execute("""SELECT id, filename, file_hash, source_id, metadata, content, country FROM documents
                        WHERE status = 'uploading' ORDER BY id""")
         docs = cur.fetchall()
         cur.execute("""SELECT doc_id, chunk_id, chunk_text, metadata FROM chunks
@@ -216,10 +218,10 @@ def load_unfinished(source_names: dict[str, str]) -> list[UploadJob]:
             chunk_rows.setdefault(doc_id, []).append(row)
 
     jobs = []
-    for doc_id, filename, file_hash, source_id, doc_metadata, content in docs:
+    for doc_id, filename, file_hash, source_id, doc_metadata, content, country in docs:
         # The upload's content type isn't stored; the browser derived it from the extension too
         job = UploadJob(filename, source_names[source_id], bytes(content or b""), mimetypes.guess_type(filename)[0],
-                        id=doc_id, file_hash=file_hash, doc_metadata=doc_metadata)
+                        id=doc_id, file_hash=file_hash, doc_metadata=doc_metadata, country=country)
         if doc_id in chunk_rows:
             rows = chunk_rows[doc_id]
             metas = [m or {} for _, _, m in rows]

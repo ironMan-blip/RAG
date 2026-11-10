@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS documents (
     metadata JSONB, -- year, grade, subject, topic, subtopic
     -- 'uploading' while processing (hidden from search and the Library), 'ready' once saved
     status VARCHAR(20) NOT NULL DEFAULT 'ready' CHECK (status IN ('uploading', 'ready')),
-    content BYTEA -- the uploaded file, kept while uploading so a restart can resume; NULL once ready
+    content BYTEA, -- the uploaded file, kept while uploading so a restart can resume; NULL once ready
+    country TEXT[] -- tools documents: countries it applies to (core/countries.py), or {'N/A'}; NULL otherwise
 );
 
 CREATE TABLE IF NOT EXISTS chunks (
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS chunks (
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'ready'
     CHECK (status IN ('uploading', 'ready'));
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS content BYTEA;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS country TEXT[];
 ALTER TABLE chunks ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'complete'
     CHECK (status IN ('incomplete', 'complete', 'unfinished'));
 DROP TABLE IF EXISTS upload_jobs;

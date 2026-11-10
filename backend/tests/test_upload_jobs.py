@@ -64,11 +64,13 @@ class LoadUnfinished(unittest.TestCase):
     def test_rebuilds_jobs_from_uploading_rows(self, db):
         cur = db.return_value.__enter__.return_value
         cur.fetchall.side_effect = [
-            [(7, "a.pdf", "h", "tools-uuid", {"year": "2024"}, b"pdf"), (8, "b.txt", "h2", "tools-uuid", None, b"txt")],
+            [(7, "a.pdf", "h", "tools-uuid", {"year": "2024"}, b"pdf", ["India"]),
+             (8, "b.txt", "h2", "tools-uuid", None, b"txt", ["N/A"])],
             [(7, 70, "x", {"type": "paragraph", "page": 1, "tags": ["t"], "summary": "s"}), (7, 71, "y", {})],
         ]
         extracted, extracting = upload_jobs.load_unfinished({"tools-uuid": "tools"})
         self.assertEqual((extracted.id, extracted.source, extracted.chunk_ids), (7, "tools", [70, 71]))
+        self.assertEqual((extracted.country, extracting.country), (["India"], ["N/A"]))
         self.assertEqual(extracted.chunks, [{"text": "x", "type": "paragraph", "page": 1}, {"text": "y"}])
         self.assertEqual((extracted.tags, extracted.summaries), ([["t"], None], ["s", None]))
         # Interrupted mid-extraction: starts over from the stored file

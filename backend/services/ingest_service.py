@@ -21,12 +21,14 @@ def list_uploads() -> list[dict]:
     return [{**u, "color": TAG_STYLES[SOURCE_IDS[u["source"]]][2]} for u in upload_jobs.list_jobs()]
 
 
-def _is_unchanged(cur, file_name: str, file_hash: str, source_id: str, session_id: Optional[str]) -> bool:
+def _is_unchanged(cur, file_name: str, file_hash: str, source_id: str, session_id: Optional[str],
+                  country: Optional[list[str]]) -> bool:
+    # A re-upload with other countries is a change, so it replaces the saved document
     cur.execute(
         """SELECT 1 FROM documents
            WHERE filename = %s AND file_hash = %s AND source_id = %s
-             AND session_id IS NOT DISTINCT FROM %s AND status = 'ready'""",
-        (file_name, file_hash, source_id, session_id),
+             AND session_id IS NOT DISTINCT FROM %s AND country IS NOT DISTINCT FROM %s AND status = 'ready'""",
+        (file_name, file_hash, source_id, session_id, country),
     )
     return cur.fetchone() is not None
 
@@ -44,7 +46,7 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
 
     # Cheap duplicate check first, so a re-upload skips the slow extraction below
     with db_cursor() as cur:
-        if _is_unchanged(cur, file_name, file_hash, source_id, session_id):
+        if _is_unchanged(cur, file_name, file_hash, source_id, session_id, job.country):
             return f"File {file_name} already exists (duplicate not saved)"
 
     if job.chunks is None:
@@ -75,15 +77,16 @@ def process_and_save_document(file_name: str, content: bytes, content_type: str,
     with db_cursor() as cur:
         # Replaces a saved document of that name, or this job's own 'uploading' one, never another upload's
         cur.execute(
-            """INSERT INTO documents (filename, file_hash, source_id, session_id, metadata, status)
-               VALUES (%s, %s, %s, %s, %s, 'ready')
+            """INSERT INTO documents (filename, file_hash, source_id, session_id, metadata, country, status)
+               VALUES (%s, %s, %s, %s, %s, %s, 'ready')
                ON CONFLICT (filename) DO UPDATE SET
                    file_hash = EXCLUDED.file_hash, source_id = EXCLUDED.source_id,
-                   session_id = EXCLUDED.session_id, metadata = EXCLUDED.metadata, status = 'ready',
-                   content = NULL
+                   session_id = EXCLUDED.session_id, metadata = EXCLUDED.metadata, country = EXCLUDED.country,
+                   status = 'ready', content = NULL
                WHERE documents.status = 'ready' OR documents.id = %s
                RETURNING id""",
-            (file_name, file_hash, source_id, session_id, Json(doc_metadata) if doc_metadata else None, job.id),
+            (file_name, file_hash, source_id, session_id, Json(doc_metadata) if doc_metadata else None, job.country,
+             job.id),
         )
         row = cur.fetchone()
         if row is None:
@@ -121,7 +124,8 @@ def _process_in_background(job: upload_jobs.UploadJob):
     job.worker.start()
 
 
-def start_upload(file_name: str, content: bytes, content_type: str, source: str) -> Optional[dict]:
+def start_upload(file_name: str, content: bytes, content_type: str, source: str,
+                 country: Optional[list[str]] = None) -> Optional[dict]:
     """Process an upload in the background; its progress is listed by upload_jobs.list_jobs until it finishes.
 
     Returns None for a file already saved unchanged. Raises UploadInProgress if that filename is uploading.
@@ -129,9 +133,9 @@ def start_upload(file_name: str, content: bytes, content_type: str, source: str)
     file_hash = hashlib.sha256(content).hexdigest()
     # Checked before create, which would otherwise overwrite the saved document
     with db_cursor() as cur:
-        if _is_unchanged(cur, file_name, file_hash, SOURCE_IDS[source], None):
+        if _is_unchanged(cur, file_name, file_hash, SOURCE_IDS[source], None, country):
             return None
-    job = upload_jobs.create(file_name, source, SOURCE_IDS[source], content, content_type, file_hash)
+    job = upload_jobs.create(file_name, source, SOURCE_IDS[source], content, content_type, file_hash, country)
     if job is None:
         raise UploadInProgress(f"{file_name} is already being uploaded.")
     _process_in_background(job)

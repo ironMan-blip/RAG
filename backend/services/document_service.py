@@ -1,14 +1,19 @@
 """Library reads and deletes for saved documents; uploads are services.ingest_service."""
 import json
 
+from core.countries import COUNTRY_OPTIONS
 from core.database import db_cursor
 from core.sources import SOURCE_IDS, TAG_STYLES
 
 
 def get_upload_sources() -> list[dict]:
-    """Sources a client may upload to (chat is implicit), with label and accent color for the UI."""
+    """Sources a client may upload to (chat is implicit), with label and accent color for the UI.
+
+    countries: options the upload must pick at least one of (tools), or None when it takes no countries.
+    """
     return [
-        {"value": name, "label": TAG_STYLES[SOURCE_IDS[name]][0], "color": TAG_STYLES[SOURCE_IDS[name]][2]}
+        {"value": name, "label": TAG_STYLES[SOURCE_IDS[name]][0], "color": TAG_STYLES[SOURCE_IDS[name]][2],
+         "countries": COUNTRY_OPTIONS if name == 'tools' else None}
         for name in ('library', 'tools')
     ]
 
@@ -18,7 +23,7 @@ def get_all_documents(search: str = ""):
     pattern = "%" + search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     with db_cursor() as cur:
         cur.execute("""
-            SELECT d.id, d.filename, d.source_id, s.source_name, d.metadata,
+            SELECT d.id, d.filename, d.source_id, s.source_name, d.metadata, d.country,
                    EXISTS (SELECT 1 FROM chunks c WHERE c.doc_id = d.id AND c.status = 'unfinished')
             FROM documents d
             LEFT JOIN source s ON d.source_id = s.uuid
@@ -27,7 +32,7 @@ def get_all_documents(search: str = ""):
         """, (pattern,))
         rows = cur.fetchall()
     docs = []
-    for doc_id, filename, source_id, source_name, metadata, unfinished in rows:
+    for doc_id, filename, source_id, source_name, metadata, country, unfinished in rows:
         label, bg_color, text_color = TAG_STYLES.get(source_id, (source_name or "unknown", '#f1f5f9', '#64748b'))
         docs.append({
             "id": doc_id,
@@ -35,6 +40,7 @@ def get_all_documents(search: str = ""):
             "tag_label": label,
             "tag_bg_color": bg_color,
             "tag_text_color": text_color,
+            "country_text": ", ".join(country) if country else None,
             "metadata_text": json.dumps(metadata, indent=2) if metadata else "No metadata available for this document.",
             "unfinished_text": "Some chunks failed to generate. Open the document to regenerate them." if unfinished else None,
         })

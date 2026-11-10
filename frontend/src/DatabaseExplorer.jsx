@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertTriangle, Upload, Search, X, Inbox } from 'lucide-react';
 import { API_BASE } from './api';
 import ConfirmDialog from './components/ConfirmDialog';
+import CountryDialog from './components/CountryDialog';
 import DocumentCard from './components/DocumentCard';
 import UploadCard from './components/UploadCard';
 
@@ -27,6 +28,9 @@ export default function DatabaseExplorer() {
   const [uploadSources, setUploadSources] = useState([]);
   const uploadInputRef = useRef(null);
   const uploadSourceRef = useRef(null);
+  const uploadCountriesRef = useRef([]);
+  // Source whose upload is waiting on the country picker
+  const [countrySource, setCountrySource] = useState(null);
 
   // Background processing jobs from the backend; failed ones linger until dismissed here
   const [uploads, setUploads] = useState([]);
@@ -195,6 +199,7 @@ export default function DatabaseExplorer() {
 
   const handleFileUpload = async (event) => {
     const source = uploadSourceRef.current;
+    const countries = uploadCountriesRef.current;
     const files = [...event.target.files];
     if (!files.length) return;
 
@@ -207,6 +212,7 @@ export default function DatabaseExplorer() {
         const formData = new FormData();
         formData.append('file', file);
         if (source) formData.append('source', source);
+        countries.forEach(c => formData.append('countries', c));
 
         const res = await fetch(`${API_BASE}/upload`, {
           method: 'POST',
@@ -246,7 +252,12 @@ export default function DatabaseExplorer() {
             <button
               key={src.value}
               className="btn"
-              onClick={() => { uploadSourceRef.current = src.value; uploadInputRef.current?.click(); }}
+              onClick={() => {
+                uploadSourceRef.current = src.value;
+                uploadCountriesRef.current = [];
+                if (src.countries) setCountrySource(src);
+                else uploadInputRef.current?.click();
+              }}
               disabled={isUploading}
             >
               <Upload size={15} />
@@ -319,6 +330,18 @@ export default function DatabaseExplorer() {
           ))}
         </div>
       </div>
+
+      {countrySource && (
+        <CountryDialog
+          options={countrySource.countries}
+          onCancel={() => setCountrySource(null)}
+          onConfirm={(countries) => {
+            uploadCountriesRef.current = countries;
+            setCountrySource(null);
+            uploadInputRef.current?.click();
+          }}
+        />
+      )}
 
       {documentToDelete && (
         <ConfirmDialog title="Delete document?" busy={isDeleting} onConfirm={executeDelete} onCancel={() => setDocumentToDelete(null)}>
