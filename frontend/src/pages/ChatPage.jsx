@@ -1,13 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Sparkles, Paperclip, X, Library, Menu, FileText } from 'lucide-react';
+import { ArrowUp, Sparkles, Paperclip, X, Library, Menu, FileText, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE } from './api';
-import ChatMessage, { BotAvatar } from './components/ChatMessage';
-import ChatSidebar from './components/ChatSidebar';
-import ConfirmDialog from './components/ConfirmDialog';
-import ModelPicker from './components/ModelPicker';
+import { api } from '../api';
+import ChatMessage, { BotAvatar } from '../components/ChatMessage';
+import ChatSidebar from '../components/ChatSidebar';
+import ConfirmDialog from '../components/ConfirmDialog';
+import ModelPicker from '../components/ModelPicker';
+import UserDialog from '../components/UserDialog';
 
-function App() {
+// The picked user is a per-browser convenience; storage can be unavailable (private mode)
+const loadUser = () => { try { return JSON.parse(localStorage.getItem('user')); } catch { return null; } };
+const saveUser = (u) => { try { localStorage.setItem('user', JSON.stringify(u)); } catch { /* not remembered */ } };
+
+export default function ChatPage() {
   const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
@@ -21,17 +26,16 @@ function App() {
   const [openDetailsIdx, setOpenDetailsIdx] = useState(null);
   const [chatToDelete, setChatToDelete] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
+  const [user, setUser] = useState(loadUser);
+  const [isUserDialogOpen, setIsUserDialogOpen] = useState(() => !loadUser());
 
   const textareaRef = useRef(null);
   const chatBoxRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const fetchChatSessions = () => {
-    fetch(`${API_BASE}/chats`, { cache: 'no-store' })
-      .then(res => res.json())
-      .then(data => {
-        if (data.chats) setChatSessions(data.chats);
-      })
+    api('/chats', { cache: 'no-store' })
+      .then(data => setChatSessions(data.chats))
       .catch(err => console.error("Failed to fetch chats:", err));
   };
 
@@ -39,8 +43,7 @@ function App() {
     setInputValue("");
     setSelectedFile(null);
     textareaRef.current?.focus();
-    fetch(`${API_BASE}/chats`, { method: 'POST' })
-      .then(res => res.json())
+    api('/chats', { method: 'POST' })
       .then(data => {
         setChatId(data.session_id);
         setMessages(data.history);
@@ -59,8 +62,7 @@ function App() {
   useEffect(() => {
     fetchChatSessions();
     startNewChat();
-    fetch(`${API_BASE}/models`)
-      .then(res => res.json())
+    api('/models')
       .then(data => {
         setAvailableModels(data.models);
         setSelectedModel(data.default || "");
@@ -83,22 +85,19 @@ function App() {
   };
 
   const loadChat = (id) => {
-    fetch(`${API_BASE}/chats/${id}`)
-      .then(res => res.json())
+    api(`/chats/${id}`)
       .then(data => {
-        if (data.history) {
-          setChatId(id);
-          setMessages(data.history);
-          setOpenDetailsIdx(null);
-          setIsSidebarOpen(false);
-        }
+        setChatId(id);
+        setMessages(data.history);
+        setOpenDetailsIdx(null);
+        setIsSidebarOpen(false);
       })
       .catch(err => console.error("Failed to load chat:", err));
   };
 
   const deleteChat = (id) => {
     setChatToDelete(null);
-    fetch(`${API_BASE}/chats/${id}`, { method: 'DELETE' })
+    api(`/chats/${id}`, { method: 'DELETE' })
       .then(() => {
         fetchChatSessions();
         if (chatId === id) startNewChat();
@@ -126,13 +125,7 @@ function App() {
       if (fileToUpload) formData.append('file', fileToUpload);
 
       // No Content-Type header: the browser sets multipart/form-data with its boundary
-      const response = await fetch(`${API_BASE}/chat`, { method: 'POST', body: formData });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await api('/chat', { method: 'POST', body: formData });
       setChatId(data.session_id);
       fetchChatSessions();
       setMessages(prev => [...prev.filter(m => !m.pending), ...data.messages]);
@@ -179,6 +172,10 @@ function App() {
           </button>
           <h1 className="chat-title">{currentTitle}</h1>
           <div className="header-actions">
+            <button className="btn" onClick={() => setIsUserDialogOpen(true)} title="Change user">
+              <User size={15} />
+              <span className="btn-label">{user ? `${user.name} · ${user.country}` : 'Select user'}</span>
+            </button>
             <ModelPicker models={availableModels} value={selectedModel} onChange={setSelectedModel} />
             <button className="btn" onClick={() => navigate('/admin')} title="Browse indexed documents">
               <Library size={15} />
@@ -280,6 +277,13 @@ function App() {
         </footer>
       </div>
 
+      {isUserDialogOpen && (
+        <UserDialog
+          current={user}
+          onSelect={(u) => { setUser(u); saveUser(u); setIsUserDialogOpen(false); }}
+          onCancel={() => setIsUserDialogOpen(false)}
+        />
+      )}
       {chatToDelete && (
         <ConfirmDialog title="Delete conversation?" onConfirm={() => deleteChat(chatToDelete.id)} onCancel={() => setChatToDelete(null)}>
           <strong>{chatToDelete.name}</strong> will be permanently removed. This can't be undone.
@@ -288,5 +292,3 @@ function App() {
     </div>
   );
 }
-
-export default App;

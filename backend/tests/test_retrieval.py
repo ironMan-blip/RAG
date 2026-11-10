@@ -31,9 +31,9 @@ class TwoPhaseRetrieval(unittest.TestCase):
         self.cur.close()
         pool.putconn(self.conn)
 
-    def add_doc(self, name: str, metadata: dict, chunks: list[tuple[str, float]]):
-        self.cur.execute("INSERT INTO documents (filename, session_id, metadata) VALUES (%s, %s, %s) RETURNING id",
-                         (f"{self.session}-{name}", self.session, Json(metadata)))
+    def add_doc(self, name: str, metadata: dict, chunks: list[tuple[str, float]], country: str = None):
+        self.cur.execute("INSERT INTO documents (filename, session_id, metadata, country) VALUES (%s, %s, %s, %s)"
+                         " RETURNING id", (f"{self.session}-{name}", self.session, Json(metadata), country))
         doc_id = self.cur.fetchone()[0]
         for text, angle in chunks:
             self.cur.execute("INSERT INTO chunks (doc_id, chunk_text, chunk_embedding) VALUES (%s, %s, %s)",
@@ -66,6 +66,39 @@ class TwoPhaseRetrieval(unittest.TestCase):
         # All below 0.7 (cos(1.0) ~ 0.54), so only the MIN_CHUNKS closest come back
         self.add_doc("bio", {"subject": "Biology"}, [(f"b{i}", 1.0 + 0.01 * i) for i in range(5)])
         self.assertEqual(self.search({"subject": "biology"}), ["b0", "b1", "b2"])
+
+    def test_only_the_most_common_country_is_kept_with_na_and_untagged(self):
+        bio = {"subject": "Biology"}
+        self.add_doc("in1", bio, [("in1", 0.3)], "India")
+        self.add_doc("bd", bio, [("bd", 0.1)], "Bangladesh")
+        self.add_doc("na", bio, [("na", 0.2)], "Global")
+        self.add_doc("untagged", bio, [("untagged", 0.5)])
+        self.add_doc("in2", bio, [("in2", 0.6)], "India")
+        # India 2 vs Bangladesh 1: Bangladesh's chunk is dropped even though it is the closest
+        self.assertEqual(self.search({"subject": "biology"}), ["na", "in1", "untagged", "in2"])
+
+    def test_country_tie_goes_to_the_best_ranked_document(self):
+        self.add_doc("bd", {"subject": "Biology"}, [("bd", 0.1)], "Bangladesh")
+        self.add_doc("in", {"subject": "Biology", "grade": "Grade 8"}, [("in", 0.2)], "India")
+        self.assertEqual(self.search({"subject": "biology", "grade": "8"}), ["in"])
+
+    def test_country_is_counted_only_within_the_top_10(self):
+        # 3 Bangladesh documents rank 11th-13th, so India's 2 in the top 10 still win
+        for i in range(8):
+            self.add_doc(f"na{i}", {"subject": "Biology", "grade": "Grade 8"}, [(f"na{i}", 0.2)], "Global")
+        self.add_doc("in1", {"subject": "Biology", "grade": "Grade 8"}, [("in1", 0.3)], "India")
+        self.add_doc("in2", {"subject": "Biology", "grade": "Grade 8"}, [("in2", 0.3)], "India")
+        for i in range(3):
+            self.add_doc(f"bd{i}", {"subject": "Biology"}, [(f"bd{i}", 0.1)], "Bangladesh")
+        self.assertEqual(sorted(self.search({"subject": "biology", "grade": "8"})),
+                         sorted([f"na{i}" for i in range(8)] + ["in1", "in2"]))
+
+    def test_fallback_documents_follow_the_country_rule(self):
+        self.add_doc("in1", {}, [("in1", 0.1)], "India")
+        self.add_doc("in2", {}, [("in2", 0.2)], "India")
+        self.add_doc("bd", {}, [("bd", 0.3)], "Bangladesh")
+        self.add_doc("na", {}, [("na", 0.4)], "Global")
+        self.assertEqual(self.search({}), ["in1", "in2", "na"])
 
 
 if __name__ == "__main__":

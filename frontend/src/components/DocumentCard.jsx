@@ -35,6 +35,12 @@ export default function DocumentCard({
       {expanded && (
         <div className="doc-detail">
           {doc.unfinished_text && <p className="detail-note unfinished">{doc.unfinished_text}</p>}
+          {doc.country_text && (
+            <>
+              <div className="section-label">Country</div>
+              <p className="detail-note">{doc.country_text}</p>
+            </>
+          )}
           <div className="section-label">Metadata</div>
           <pre className="meta-block">{doc.metadata_text}</pre>
           <div className="section-label">Chunks{Array.isArray(chunks) && ` (${chunks.length})`}</div>

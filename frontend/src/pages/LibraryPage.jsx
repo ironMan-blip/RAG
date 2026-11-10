@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertTriangle, Upload, Search, X, Inbox } from 'lucide-react';
-import { API_BASE } from './api';
-import ConfirmDialog from './components/ConfirmDialog';
-import DocumentCard from './components/DocumentCard';
-import UploadCard from './components/UploadCard';
+import { api } from '../api';
+import ConfirmDialog from '../components/ConfirmDialog';
+import CountryDialog from '../components/CountryDialog';
+import DocumentCard from '../components/DocumentCard';
+import UploadCard from '../components/UploadCard';
 
-export default function DatabaseExplorer() {
+export default function LibraryPage() {
   const navigate = useNavigate();
   const [documents, setDocuments] = useState([]);
   const [countText, setCountText] = useState('');
@@ -27,6 +28,9 @@ export default function DatabaseExplorer() {
   const [uploadSources, setUploadSources] = useState([]);
   const uploadInputRef = useRef(null);
   const uploadSourceRef = useRef(null);
+  const uploadCountryRef = useRef(null);
+  // Source whose upload is waiting on the country picker
+  const [countrySource, setCountrySource] = useState(null);
 
   // Background processing jobs from the backend; failed ones linger until dismissed here
   const [uploads, setUploads] = useState([]);
@@ -40,18 +44,14 @@ export default function DatabaseExplorer() {
   const query = search.trim();
 
   useEffect(() => {
-    fetch(`${API_BASE}/upload-sources`)
-      .then(res => res.json())
-      .then(data => setUploadSources(data.sources || []))
+    api('/upload-sources')
+      .then(data => setUploadSources(data.sources))
       .catch(err => console.error("Failed to fetch upload sources", err));
   }, []);
 
   const fetchUploads = async () => {
     try {
-      const res = await fetch(`${API_BASE}/uploads`, { cache: "no-store" });
-      if (!res.ok) return;
-      const data = await res.json();
-      const list = data.uploads || [];
+      const { uploads: list } = await api('/uploads', { cache: "no-store" });
       const running = list.filter(u => !u.error).length;
       // A job left the running set, so its document is now in (or failed out of) the list
       if (running < runningUploadsRef.current) fetchDocuments();
@@ -60,25 +60,23 @@ export default function DatabaseExplorer() {
       setServerDown(false);
     } catch (error) {
       console.error("Failed to fetch uploads", error);
-      setServerDown(true);
+      if (error.status === undefined) setServerDown(true);  // no reply at all, not an error reply
     }
   };
 
   const cancelUpload = async (u) => {
     try {
-      const res = await fetch(`${API_BASE}/uploads/${u.id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 404) setError(`Couldn't stop the upload of ${u.filename}.`);
+      await api(`/uploads/${u.id}`, { method: "DELETE" });
     } catch (error) {
       console.error("Failed to cancel upload", error);
-      setError(`Couldn't stop the upload of ${u.filename}.`);
+      if (error.status !== 404) setError(`Couldn't stop the upload of ${u.filename}.`);  // 404: already gone
     }
     await fetchUploads();
   };
 
   const setUploadPaused = async (u, pause) => {
     try {
-      const res = await fetch(`${API_BASE}/uploads/${u.id}/${pause ? 'pause' : 'resume'}`, { method: "POST" });
-      if (!res.ok) setError(`Couldn't ${pause ? 'pause' : 'resume'} the upload of ${u.filename}.`);
+      await api(`/uploads/${u.id}/${pause ? 'pause' : 'resume'}`, { method: "POST" });
     } catch (error) {
       console.error("Failed to change upload state", error);
       setError(`Couldn't ${pause ? 'pause' : 'resume'} the upload of ${u.filename}.`);
@@ -104,13 +102,9 @@ export default function DatabaseExplorer() {
   const fetchDocuments = async () => {
     setLoadingDocs(true);
     try {
-      const params = new URLSearchParams({ q: query });
-      const res = await fetch(`${API_BASE}/documents?${params}`, { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        setDocuments(data.documents || []);
-        setCountText(data.count_text);
-      }
+      const data = await api(`/documents?${new URLSearchParams({ q: query })}`, { cache: "no-store" });
+      setDocuments(data.documents);
+      setCountText(data.count_text);
     } catch (error) {
       console.error("Failed to fetch documents", error);
     } finally {
@@ -121,10 +115,8 @@ export default function DatabaseExplorer() {
   const fetchChunks = async (docId) => {
     setChunksByDoc(prev => ({ ...prev, [docId]: null }));
     try {
-      const res = await fetch(`${API_BASE}/documents/${docId}/chunks`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setChunksByDoc(prev => ({ ...prev, [docId]: data.chunks || [] }));
+      const data = await api(`/documents/${docId}/chunks`, { cache: "no-store" });
+      setChunksByDoc(prev => ({ ...prev, [docId]: data.chunks }));
     } catch (error) {
       console.error("Failed to fetch chunks", error);
       setChunksByDoc(prev => ({ ...prev, [docId]: 'error' }));
@@ -136,9 +128,7 @@ export default function DatabaseExplorer() {
     const key = `${chunkId}:${kind}`;
     setRegeneratingChunkIds(prev => new Set(prev).add(key));
     try {
-      const res = await fetch(`${API_BASE}/chunks/${chunkId}/${kind}`, { method: 'POST' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await api(`/chunks/${chunkId}/${kind}`, { method: 'POST' });
       setChunksByDoc(prev => Array.isArray(prev[docId]) ? {
         ...prev,
         [docId]: prev[docId].map(c => c.chunk_id === chunkId ? data.chunk : c)
@@ -178,16 +168,14 @@ export default function DatabaseExplorer() {
     if (!documentToDelete) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`${API_BASE}/documents/${documentToDelete.id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setDocumentToDelete(null);
-        await refresh();
-      } else {
-        setError(`Couldn't delete ${documentToDelete.filename}. Try again.`);
-      }
+      await api(`/documents/${documentToDelete.id}`, { method: 'DELETE' });
+      setDocumentToDelete(null);
+      await refresh();
     } catch (error) {
       console.error("Failed to delete document", error);
-      setError("Couldn't reach the server to delete the document.");
+      setError(error.status === undefined
+        ? "Couldn't reach the server to delete the document."
+        : `Couldn't delete ${documentToDelete.filename}. Try again.`);
     } finally {
       setIsDeleting(false);
     }
@@ -195,6 +183,7 @@ export default function DatabaseExplorer() {
 
   const handleFileUpload = async (event) => {
     const source = uploadSourceRef.current;
+    const country = uploadCountryRef.current;
     const files = [...event.target.files];
     if (!files.length) return;
 
@@ -207,16 +196,13 @@ export default function DatabaseExplorer() {
         const formData = new FormData();
         formData.append('file', file);
         if (source) formData.append('source', source);
-
-        const res = await fetch(`${API_BASE}/upload`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!res.ok) {
-          // Backend explains rejections (size limit, unknown source); validation errors come as a list
-          const { detail } = await res.json().catch(() => ({}));
-          errors.push(typeof detail === 'string' ? detail : `Couldn't upload ${file.name}. Check the file type and try again.`);
+        if (country) formData.append('country', country);
+        try {
+          await api('/upload', { method: 'POST', body: formData });
+        } catch (error) {
+          if (error.status === undefined) throw error;  // server unreachable: stop the batch
+          // Backend explains rejections (size limit, unknown source)
+          errors.push(error.detail ?? `Couldn't upload ${file.name}. Check the file type and try again.`);
         }
         await fetchUploads();
       }
@@ -246,7 +232,12 @@ export default function DatabaseExplorer() {
             <button
               key={src.value}
               className="btn"
-              onClick={() => { uploadSourceRef.current = src.value; uploadInputRef.current?.click(); }}
+              onClick={() => {
+                uploadSourceRef.current = src.value;
+                uploadCountryRef.current = null;
+                if (src.countries) setCountrySource(src);
+                else uploadInputRef.current?.click();
+              }}
               disabled={isUploading}
             >
               <Upload size={15} />
@@ -319,6 +310,18 @@ export default function DatabaseExplorer() {
           ))}
         </div>
       </div>
+
+      {countrySource && (
+        <CountryDialog
+          options={countrySource.countries}
+          onCancel={() => setCountrySource(null)}
+          onConfirm={(country) => {
+            uploadCountryRef.current = country;
+            setCountrySource(null);
+            uploadInputRef.current?.click();
+          }}
+        />
+      )}
 
       {documentToDelete && (
         <ConfirmDialog title="Delete document?" busy={isDeleting} onConfirm={executeDelete} onCancel={() => setDocumentToDelete(null)}>

@@ -193,6 +193,17 @@ pre {
   border-color: #991b1b;
 }
 
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -1096,7 +1107,7 @@ kbd {
   }
 }
 
-/* Library (DatabaseExplorer) */
+/* Library (pages/LibraryPage) */
 .explorer {
   height: 100%;
   display: flex;
@@ -1180,7 +1191,17 @@ kbd {
   color: var(--ink);
 }
 
-.search-field input:focus-visible {
+.search-field select {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  color: var(--ink);
+}
+
+.search-field input:focus-visible,
+.search-field select:focus-visible {
   box-shadow: none;
 }
 
@@ -1568,6 +1589,50 @@ kbd {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 24px;
+}
+
+/* Country picker */
+.country-search {
+  margin-top: 16px;
+}
+
+.country-list {
+  max-height: 280px;
+  margin-top: 10px;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.country-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.country-option:hover {
+  background: var(--subtle);
+}
+
+.country-option input {
+  accent-color: var(--accent);
+}
+
+.country-count {
+  flex: 1;
+  min-width: 0;
+  align-self: center;
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 600px) {

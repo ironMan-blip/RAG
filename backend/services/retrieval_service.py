@@ -9,7 +9,7 @@ from core.database import db_cursor
 from core.ml import embedder
 from core.timing import timed
 from services.document_service import get_document_names
-from services.tagging_service import generate_query_profile
+from services.tagging_service import QueryProfile, generate_query_profile
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +17,12 @@ _http = httpx.Client(timeout=10.0, headers={"Authorization": f"Bearer {settings.
 
 JEV_URL = "https://openrouter.ai/api/alpha/decisions"
 
-_PROFILE_FIELDS = ("year", "grade", "subject", "topic", "subtopic")
+_PROFILE_FIELDS = tuple(QueryProfile.model_fields)
 
 # Phase 1: top 10 documents by how many profile fields match their metadata (case-insensitive substring
 #          either way, so "8" matches "Grade 8"); if none match, every document in scope.
+# Country: of those documents, only the most common country's (ties: the best-ranked document's) are kept,
+#          plus Global and untagged ones, so excerpts never mix countries.
 # Phase 2: every chunk of those documents with cosine similarity >= MIN_SIMILARITY to the query embedding,
 #          most similar first; the MIN_CHUNKS most similar always pass, so a low-scoring query still gets context.
 #
@@ -32,7 +34,7 @@ MIN_SIMILARITY = 0.7
 MIN_CHUNKS = 3
 _CONTEXT_SQL = """
     WITH scored AS (
-        SELECT d.id FROM documents d,
+        SELECT d.id, s.score, d.country FROM documents d,
         LATERAL (
             SELECT count(*) AS score FROM jsonb_each_text(%(profile)s::jsonb) q
             WHERE NULLIF(d.metadata->>q.key, '') IS NOT NULL
@@ -44,9 +46,20 @@ _CONTEXT_SQL = """
         LIMIT 10
     ),
     top_docs AS (
-        SELECT id FROM scored
+        SELECT id, score, country FROM scored
         UNION ALL
-        SELECT d.id FROM documents d WHERE ({scope}) AND NOT EXISTS (SELECT 1 FROM scored)
+        SELECT d.id, 0, d.country FROM documents d WHERE ({scope}) AND NOT EXISTS (SELECT 1 FROM scored)
+    ),
+    top_country AS (
+        SELECT country FROM top_docs
+        WHERE country <> 'Global'
+        GROUP BY country
+        ORDER BY count(*) DESC, max(score) DESC, min(id)
+        LIMIT 1
+    ),
+    kept_docs AS (
+        SELECT id FROM top_docs
+        WHERE country IS NULL OR country = 'Global' OR country = (SELECT country FROM top_country)
     ),
     ranked AS (
         SELECT d.filename, c.chunk_text, c.previous_summary,
@@ -54,7 +67,7 @@ _CONTEXT_SQL = """
                row_number() OVER (ORDER BY c.chunk_embedding <=> %(query)s::vector) AS rank
         FROM chunks c
         JOIN documents d ON d.id = c.doc_id
-        WHERE c.doc_id IN (SELECT id FROM top_docs)
+        WHERE c.doc_id IN (SELECT id FROM kept_docs)
     )
     SELECT filename, chunk_text, previous_summary
     FROM ranked
@@ -95,13 +108,12 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
         return ""
     if not rows:
         return ""
-    excerpts = "".join(
-        f"\n--- Excerpt {i} (from {filename}) ---\n"
-        + (f"[Summary of preceding text: {summary}]\n" if summary else "")
-        + text + "\n"
+    return "\n".join(
+        f"## Excerpt {i}\n**Source:** {filename}\n\n"
+        + (f"**Previous chunk summary:** {summary}\n\n" if summary else "")
+        + f"{text}\n"
         for i, (filename, text, summary) in enumerate(rows, 1)
     )
-    return "Relevant excerpts from knowledge base:\n" + excerpts
 
 
 @traceable(run_type="llm", name="Jev")

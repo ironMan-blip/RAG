@@ -1,6 +1,9 @@
+from typing import Optional
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
+from core.countries import validate_country
 from core.sources import SOURCE_IDS
 from services import chunk_service, document_service, ingest_service, upload_jobs
 
@@ -10,15 +13,24 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 @router.post("/upload", status_code=202)
-async def upload_file(file: UploadFile = File(...), source: str = Form('library')):
+async def upload_file(file: UploadFile = File(...), source: str = Form('library'),
+                      country: Optional[str] = Form(None)):
     if source not in SOURCE_IDS:
         raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
+    # Only tools documents carry a country (or Global), and they must
+    if source == 'tools':
+        try:
+            country = validate_country(country)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    else:
+        country = None
     # Starlette spools the body to disk, so size is known before reading it into memory
     if file.size is None or file.size > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail=f"{file.filename} is larger than the 50 MB limit.")
     try:
         upload = await run_in_threadpool(ingest_service.start_upload, file.filename, await file.read(),
-                                         file.content_type, source)
+                                         file.content_type, source, country)
     except ingest_service.UploadInProgress as e:
         raise HTTPException(status_code=409, detail=str(e))
     return {"upload": upload}

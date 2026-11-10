@@ -13,7 +13,7 @@ class Settings:
     LLM_MODEL2: str = os.getenv("LLM_MODEL2", "")
     LLM_MODEL3: str = os.getenv("LLM_MODEL3", "")
     # Small model for tags, summaries, query profiles and titles
-    TAGGING_MODEL: str = os.getenv("TAGGING_MODEL", "qwen3:4b")
+    TAGGING_MODEL: str = os.getenv("TAGGING_MODEL", "qwen3:1.7b")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
     @property
