@@ -31,9 +31,9 @@ class TwoPhaseRetrieval(unittest.TestCase):
         self.cur.close()
         pool.putconn(self.conn)
 
-    def add_doc(self, name: str, metadata: dict, chunks: list[tuple[str, float]]):
-        self.cur.execute("INSERT INTO documents (filename, session_id, metadata) VALUES (%s, %s, %s) RETURNING id",
-                         (f"{self.session}-{name}", self.session, Json(metadata)))
+    def add_doc(self, name: str, metadata: dict, chunks: list[tuple[str, float]], country: list[str] = None):
+        self.cur.execute("INSERT INTO documents (filename, session_id, metadata, country) VALUES (%s, %s, %s, %s)"
+                         " RETURNING id", (f"{self.session}-{name}", self.session, Json(metadata), country))
         doc_id = self.cur.fetchone()[0]
         for text, angle in chunks:
             self.cur.execute("INSERT INTO chunks (doc_id, chunk_text, chunk_embedding) VALUES (%s, %s, %s)",
@@ -66,6 +66,29 @@ class TwoPhaseRetrieval(unittest.TestCase):
         # All below 0.7 (cos(1.0) ~ 0.54), so only the MIN_CHUNKS closest come back
         self.add_doc("bio", {"subject": "Biology"}, [(f"b{i}", 1.0 + 0.01 * i) for i in range(5)])
         self.assertEqual(self.search({"subject": "biology"}), ["b0", "b1", "b2"])
+
+    def test_only_the_most_common_country_is_kept_with_na_and_untagged(self):
+        bio = {"subject": "Biology"}
+        self.add_doc("in1", bio, [("in1", 0.3)], ["India"])
+        self.add_doc("in-bd", bio, [("in-bd", 0.4)], ["India", "Bangladesh"])
+        self.add_doc("bd", bio, [("bd", 0.1)], ["Bangladesh"])
+        self.add_doc("na", bio, [("na", 0.2)], ["N/A"])
+        self.add_doc("untagged", bio, [("untagged", 0.5)])
+        self.add_doc("in2", bio, [("in2", 0.6)], ["India"])
+        # India 3 vs Bangladesh 2: the closest chunk (bd) is dropped, the shared India/Bangladesh doc stays
+        self.assertEqual(self.search({"subject": "biology"}), ["na", "in1", "in-bd", "untagged", "in2"])
+
+    def test_country_tie_goes_to_the_best_ranked_document(self):
+        self.add_doc("bd", {"subject": "Biology"}, [("bd", 0.1)], ["Bangladesh"])
+        self.add_doc("in", {"subject": "Biology", "grade": "Grade 8"}, [("in", 0.2)], ["India"])
+        self.assertEqual(self.search({"subject": "biology", "grade": "8"}), ["in"])
+
+    def test_fallback_documents_follow_the_country_rule(self):
+        self.add_doc("in1", {}, [("in1", 0.1)], ["India"])
+        self.add_doc("in2", {}, [("in2", 0.2)], ["India"])
+        self.add_doc("bd", {}, [("bd", 0.3)], ["Bangladesh"])
+        self.add_doc("na", {}, [("na", 0.4)], ["N/A"])
+        self.assertEqual(self.search({}), ["in1", "in2", "na"])
 
 
 if __name__ == "__main__":
