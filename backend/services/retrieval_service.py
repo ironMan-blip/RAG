@@ -95,10 +95,10 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
         return ""
     if not rows:
         return ""
-    return "".join(
-        f'<excerpt index="{i}" source="{filename}">\n'
-        + (f"<previous_chunk_summary>\n{summary}\n</previous_chunk_summary>\n" if summary else "")
-        + f"<text>\n{text}\n</text>\n</excerpt>\n"
+    return "\n".join(
+        f"## Excerpt {i}\n**Source:** {filename}\n\n"
+        + (f"**Previous chunk summary:** {summary}\n\n" if summary else "")
+        + f"{text}\n"
         for i, (filename, text, summary) in enumerate(rows, 1)
     )
 
