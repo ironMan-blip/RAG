@@ -95,13 +95,12 @@ def get_database_context(query: str, attached_filename: str = None, session_id: 
         return ""
     if not rows:
         return ""
-    excerpts = "".join(
-        f"\n--- Excerpt {i} (from {filename}) ---\n"
-        + (f"[Summary of the previous chunk which might not be refering to the above chunk]: {summary}\n" if summary else "")
-        + text + "\n"
+    return "".join(
+        f'<excerpt index="{i}" source="{filename}">\n'
+        + (f"<previous_chunk_summary>\n{summary}\n</previous_chunk_summary>\n" if summary else "")
+        + f"<text>\n{text}\n</text>\n</excerpt>\n"
         for i, (filename, text, summary) in enumerate(rows, 1)
     )
-    return "Relevant excerpts from knowledge base:\n" + excerpts
 
 
 @traceable(run_type="llm", name="Jev")
