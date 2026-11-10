@@ -1,12 +1,12 @@
 import unittest
 
-from core.countries import COUNTRIES, NOT_APPLICABLE, validate_country
+from core.countries import COUNTRIES, GLOBAL, validate_country
 
 
 class ValidateCountryTest(unittest.TestCase):
     def test_accepts_a_country_or_na(self):
         self.assertEqual(validate_country('India'), 'India')
-        self.assertEqual(validate_country(NOT_APPLICABLE), NOT_APPLICABLE)
+        self.assertEqual(validate_country(GLOBAL), GLOBAL)
 
     def test_rejects_missing_and_unknown(self):
         for bad in (None, '', 'Atlantis'):

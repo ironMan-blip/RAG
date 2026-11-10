@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS documents (
     -- 'uploading' while processing (hidden from search and the Library), 'ready' once saved
     status VARCHAR(20) NOT NULL DEFAULT 'ready' CHECK (status IN ('uploading', 'ready')),
     content BYTEA, -- the uploaded file, kept while uploading so a restart can resume; NULL once ready
-    country TEXT -- tools documents: the one country it applies to (core/countries.py), or 'N/A'; NULL otherwise
+    country TEXT -- tools documents: the one country it applies to (core/countries.py), or 'Global'; NULL otherwise
 );
 
 CREATE TABLE IF NOT EXISTS chunks (
@@ -47,6 +47,7 @@ ALTER TABLE documents ADD COLUMN IF NOT EXISTS country TEXT;
 ALTER TABLE chunks ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'complete'
     CHECK (status IN ('incomplete', 'complete', 'unfinished'));
 DROP TABLE IF EXISTS upload_jobs;
+UPDATE documents SET country = 'Global' WHERE country = 'N/A'; -- renamed from N/A
 
 CREATE INDEX IF NOT EXISTS chunks_doc_id_idx ON chunks (doc_id);
 -- Approximate nearest-neighbour search for ORDER BY chunk_embedding <=> q LIMIT k; cosine ops to match

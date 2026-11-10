@@ -71,7 +71,7 @@ class TwoPhaseRetrieval(unittest.TestCase):
         bio = {"subject": "Biology"}
         self.add_doc("in1", bio, [("in1", 0.3)], "India")
         self.add_doc("bd", bio, [("bd", 0.1)], "Bangladesh")
-        self.add_doc("na", bio, [("na", 0.2)], "N/A")
+        self.add_doc("na", bio, [("na", 0.2)], "Global")
         self.add_doc("untagged", bio, [("untagged", 0.5)])
         self.add_doc("in2", bio, [("in2", 0.6)], "India")
         # India 2 vs Bangladesh 1: Bangladesh's chunk is dropped even though it is the closest
@@ -85,7 +85,7 @@ class TwoPhaseRetrieval(unittest.TestCase):
     def test_country_is_counted_only_within_the_top_10(self):
         # 3 Bangladesh documents rank 11th-13th, so India's 2 in the top 10 still win
         for i in range(8):
-            self.add_doc(f"na{i}", {"subject": "Biology", "grade": "Grade 8"}, [(f"na{i}", 0.2)], "N/A")
+            self.add_doc(f"na{i}", {"subject": "Biology", "grade": "Grade 8"}, [(f"na{i}", 0.2)], "Global")
         self.add_doc("in1", {"subject": "Biology", "grade": "Grade 8"}, [("in1", 0.3)], "India")
         self.add_doc("in2", {"subject": "Biology", "grade": "Grade 8"}, [("in2", 0.3)], "India")
         for i in range(3):
@@ -97,7 +97,7 @@ class TwoPhaseRetrieval(unittest.TestCase):
         self.add_doc("in1", {}, [("in1", 0.1)], "India")
         self.add_doc("in2", {}, [("in2", 0.2)], "India")
         self.add_doc("bd", {}, [("bd", 0.3)], "Bangladesh")
-        self.add_doc("na", {}, [("na", 0.4)], "N/A")
+        self.add_doc("na", {}, [("na", 0.4)], "Global")
         self.assertEqual(self.search({}), ["in1", "in2", "na"])
 
 

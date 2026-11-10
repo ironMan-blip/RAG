@@ -1,7 +1,7 @@
 """Countries a tools document can be tagged with; stored in documents.country."""
 from typing import Optional
 
-NOT_APPLICABLE = 'N/A'
+GLOBAL = 'Global'
 
 # UN member states plus the two observer states
 COUNTRIES = [
@@ -30,15 +30,15 @@ COUNTRIES = [
     'United States', 'Uruguay', 'Uzbekistan', 'Vanuatu', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe',
 ]
 
-# What the upload picker offers, N/A first
-COUNTRY_OPTIONS = [NOT_APPLICABLE, *COUNTRIES]
+# What the upload picker offers, Global first
+COUNTRY_OPTIONS = [GLOBAL, *COUNTRIES]
 _ALLOWED = set(COUNTRY_OPTIONS)
 
 
 def validate_country(country: Optional[str]) -> str:
-    """The country, or ValueError unless it is one known country or N/A."""
+    """The country, or ValueError unless it is one known country or Global."""
     if not country:
-        raise ValueError("Select a country, or N/A.")
+        raise ValueError("Select a country, or Global.")
     if country not in _ALLOWED:
         raise ValueError(f"Unknown country: {country}")
     return country

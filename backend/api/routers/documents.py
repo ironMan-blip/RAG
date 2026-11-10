@@ -17,7 +17,7 @@ async def upload_file(file: UploadFile = File(...), source: str = Form('library'
                       country: Optional[str] = Form(None)):
     if source not in SOURCE_IDS:
         raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
-    # Only tools documents carry a country (or N/A), and they must
+    # Only tools documents carry a country (or Global), and they must
     if source == 'tools':
         try:
             country = validate_country(country)

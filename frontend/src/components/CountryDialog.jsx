@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Search } from 'lucide-react';
 import Modal from './Modal';
 
-// Pick the one country an upload is for; options come from the backend with N/A first.
+// Pick the one country an upload is for; options come from the backend with Global first.
 export default function CountryDialog({ options, onConfirm, onCancel }) {
   const [selected, setSelected] = useState(null);
   const [filter, setFilter] = useState('');
@@ -13,7 +13,7 @@ export default function CountryDialog({ options, onConfirm, onCancel }) {
   return (
     <Modal labelId="country-title" onClose={onCancel}>
       <h2 id="country-title">Which country is this for?</h2>
-      <p>Pick one, or N/A if it isn't country-specific.</p>
+      <p>Pick one, or Global if it isn't country-specific.</p>
       <label className="search-field country-search">
         <Search size={16} />
         <input

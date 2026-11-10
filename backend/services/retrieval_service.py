@@ -22,7 +22,7 @@ _PROFILE_FIELDS = tuple(QueryProfile.model_fields)
 # Phase 1: top 10 documents by how many profile fields match their metadata (case-insensitive substring
 #          either way, so "8" matches "Grade 8"); if none match, every document in scope.
 # Country: of those documents, only the most common country's (ties: the best-ranked document's) are kept,
-#          plus N/A and untagged ones, so excerpts never mix countries.
+#          plus Global and untagged ones, so excerpts never mix countries.
 # Phase 2: every chunk of those documents with cosine similarity >= MIN_SIMILARITY to the query embedding,
 #          most similar first; the MIN_CHUNKS most similar always pass, so a low-scoring query still gets context.
 #
@@ -52,14 +52,14 @@ _CONTEXT_SQL = """
     ),
     top_country AS (
         SELECT country FROM top_docs
-        WHERE country <> 'N/A'
+        WHERE country <> 'Global'
         GROUP BY country
         ORDER BY count(*) DESC, max(score) DESC, min(id)
         LIMIT 1
     ),
     kept_docs AS (
         SELECT id FROM top_docs
-        WHERE country IS NULL OR country = 'N/A' OR country = (SELECT country FROM top_country)
+        WHERE country IS NULL OR country = 'Global' OR country = (SELECT country FROM top_country)
     ),
     ranked AS (
         SELECT d.filename, c.chunk_text, c.previous_summary,
