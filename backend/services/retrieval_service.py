@@ -9,7 +9,7 @@ from core.database import db_cursor
 from core.ml import embedder
 from core.timing import timed
 from services.document_service import get_document_names
-from services.tagging_service import generate_query_profile
+from services.tagging_service import QueryProfile, generate_query_profile
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ _http = httpx.Client(timeout=10.0, headers={"Authorization": f"Bearer {settings.
 
 JEV_URL = "https://openrouter.ai/api/alpha/decisions"
 
-_PROFILE_FIELDS = ("year", "grade", "subject", "topic", "subtopic")
+_PROFILE_FIELDS = tuple(QueryProfile.model_fields)
 
 # Phase 1: top 10 documents by how many profile fields match their metadata (case-insensitive substring
 #          either way, so "8" matches "Grade 8"); if none match, every document in scope.

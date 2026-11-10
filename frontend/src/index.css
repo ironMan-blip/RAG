@@ -1107,7 +1107,7 @@ kbd {
   }
 }
 
-/* Library (DatabaseExplorer) */
+/* Library (pages/LibraryPage) */
 .explorer {
   height: 100%;
   display: flex;

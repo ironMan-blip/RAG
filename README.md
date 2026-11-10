@@ -113,7 +113,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8001
 ```
-API docs: `http://localhost:8001/docs`.
+API docs: `http://localhost:8001/docs`. Tests (no database needed): `python -m unittest`.
 
 ### 3. Frontend (React + Vite)
 ```bash
