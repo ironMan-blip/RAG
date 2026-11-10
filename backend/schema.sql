@@ -75,6 +75,6 @@ CREATE INDEX IF NOT EXISTS chat_history_session_idx ON chat_history (session_id,
 
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    country TEXT -- one of core/countries.py, or 'Global'
+    name VARCHAR(255) UNIQUE NOT NULL, -- unique: users pick themselves by name (no auth)
+    country TEXT NOT NULL -- one of core/countries.py, or 'Global'
 );

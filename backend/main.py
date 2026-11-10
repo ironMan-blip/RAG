@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from api.routers.chat import router as chat_router
 from api.routers.chats import router as chats_router
 from api.routers.documents import router as documents_router
+from api.routers.users import router as users_router
 from services import ingest_service, upload_jobs
 
 logging.basicConfig(level=logging.INFO)
@@ -48,3 +49,4 @@ app.add_middleware(
 app.include_router(chat_router, prefix="/api", tags=["chat"])
 app.include_router(chats_router, prefix="/api", tags=["chats"])
 app.include_router(documents_router, prefix="/api", tags=["documents"])
+app.include_router(users_router, prefix="/api", tags=["users"])

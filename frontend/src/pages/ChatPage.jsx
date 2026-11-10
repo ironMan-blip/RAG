@@ -1,11 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Sparkles, Paperclip, X, Library, Menu, FileText } from 'lucide-react';
+import { ArrowUp, Sparkles, Paperclip, X, Library, Menu, FileText, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import ChatMessage, { BotAvatar } from '../components/ChatMessage';
 import ChatSidebar from '../components/ChatSidebar';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ModelPicker from '../components/ModelPicker';
+import UserDialog from '../components/UserDialog';
+
+// The picked user is a per-browser convenience; storage can be unavailable (private mode)
+const loadUser = () => { try { return JSON.parse(localStorage.getItem('user')); } catch { return null; } };
+const saveUser = (u) => { try { localStorage.setItem('user', JSON.stringify(u)); } catch { /* not remembered */ } };
 
 export default function ChatPage() {
   const navigate = useNavigate();
@@ -21,6 +26,8 @@ export default function ChatPage() {
   const [openDetailsIdx, setOpenDetailsIdx] = useState(null);
   const [chatToDelete, setChatToDelete] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
+  const [user, setUser] = useState(loadUser);
+  const [isUserDialogOpen, setIsUserDialogOpen] = useState(() => !loadUser());
 
   const textareaRef = useRef(null);
   const chatBoxRef = useRef(null);
@@ -165,6 +172,10 @@ export default function ChatPage() {
           </button>
           <h1 className="chat-title">{currentTitle}</h1>
           <div className="header-actions">
+            <button className="btn" onClick={() => setIsUserDialogOpen(true)} title="Change user">
+              <User size={15} />
+              <span className="btn-label">{user ? `${user.name} · ${user.country}` : 'Select user'}</span>
+            </button>
             <ModelPicker models={availableModels} value={selectedModel} onChange={setSelectedModel} />
             <button className="btn" onClick={() => navigate('/admin')} title="Browse indexed documents">
               <Library size={15} />
@@ -266,6 +277,13 @@ export default function ChatPage() {
         </footer>
       </div>
 
+      {isUserDialogOpen && (
+        <UserDialog
+          current={user}
+          onSelect={(u) => { setUser(u); saveUser(u); setIsUserDialogOpen(false); }}
+          onCancel={() => setIsUserDialogOpen(false)}
+        />
+      )}
       {chatToDelete && (
         <ConfirmDialog title="Delete conversation?" onConfirm={() => deleteChat(chatToDelete.id)} onCancel={() => setChatToDelete(null)}>
           <strong>{chatToDelete.name}</strong> will be permanently removed. This can't be undone.
