@@ -38,7 +38,7 @@ class UploadJob:
                  id: Optional[int] = None, file_hash: Optional[str] = None, chunks: Optional[list] = None,
                  chunk_ids: Optional[list[int]] = None, doc_metadata: Optional[dict] = None,
                  tags: Optional[list] = None, summaries: Optional[list] = None,
-                 country: Optional[list[str]] = None):
+                 country: Optional[str] = None):
         self.id = id
         self.filename = filename
         self.source = source
@@ -150,7 +150,7 @@ class UploadJob:
 
 
 def create(filename: str, source: str, source_id: str, content: bytes, content_type: Optional[str],
-           file_hash: str, country: Optional[list[str]] = None) -> Optional[UploadJob]:
+           file_hash: str, country: Optional[str] = None) -> Optional[UploadJob]:
     """Register an upload as an 'uploading' document, replacing a saved one of that name.
 
     Returns None if a document of that name is already uploading.

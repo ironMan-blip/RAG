@@ -9,7 +9,7 @@ from core.sources import SOURCE_IDS, TAG_STYLES
 def get_upload_sources() -> list[dict]:
     """Sources a client may upload to (chat is implicit), with label and accent color for the UI.
 
-    countries: options the upload must pick at least one of (tools), or None when it takes no countries.
+    countries: options the upload must pick exactly one of (tools), or None when it takes no country.
     """
     return [
         {"value": name, "label": TAG_STYLES[SOURCE_IDS[name]][0], "color": TAG_STYLES[SOURCE_IDS[name]][2],
@@ -40,7 +40,7 @@ def get_all_documents(search: str = ""):
             "tag_label": label,
             "tag_bg_color": bg_color,
             "tag_text_color": text_color,
-            "country_text": ", ".join(country) if country else None,
+            "country_text": country,
             "metadata_text": json.dumps(metadata, indent=2) if metadata else "No metadata available for this document.",
             "unfinished_text": "Some chunks failed to generate. Open the document to regenerate them." if unfinished else None,
         })

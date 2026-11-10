@@ -28,7 +28,7 @@ export default function DatabaseExplorer() {
   const [uploadSources, setUploadSources] = useState([]);
   const uploadInputRef = useRef(null);
   const uploadSourceRef = useRef(null);
-  const uploadCountriesRef = useRef([]);
+  const uploadCountryRef = useRef(null);
   // Source whose upload is waiting on the country picker
   const [countrySource, setCountrySource] = useState(null);
 
@@ -199,7 +199,7 @@ export default function DatabaseExplorer() {
 
   const handleFileUpload = async (event) => {
     const source = uploadSourceRef.current;
-    const countries = uploadCountriesRef.current;
+    const country = uploadCountryRef.current;
     const files = [...event.target.files];
     if (!files.length) return;
 
@@ -212,7 +212,7 @@ export default function DatabaseExplorer() {
         const formData = new FormData();
         formData.append('file', file);
         if (source) formData.append('source', source);
-        countries.forEach(c => formData.append('countries', c));
+        if (country) formData.append('country', country);
 
         const res = await fetch(`${API_BASE}/upload`, {
           method: 'POST',
@@ -254,7 +254,7 @@ export default function DatabaseExplorer() {
               className="btn"
               onClick={() => {
                 uploadSourceRef.current = src.value;
-                uploadCountriesRef.current = [];
+                uploadCountryRef.current = null;
                 if (src.countries) setCountrySource(src);
                 else uploadInputRef.current?.click();
               }}
@@ -335,8 +335,8 @@ export default function DatabaseExplorer() {
         <CountryDialog
           options={countrySource.countries}
           onCancel={() => setCountrySource(null)}
-          onConfirm={(countries) => {
-            uploadCountriesRef.current = countries;
+          onConfirm={(country) => {
+            uploadCountryRef.current = country;
             setCountrySource(null);
             uploadInputRef.current?.click();
           }}

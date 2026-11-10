@@ -37,7 +37,7 @@ export default function DocumentCard({
           {doc.unfinished_text && <p className="detail-note unfinished">{doc.unfinished_text}</p>}
           {doc.country_text && (
             <>
-              <div className="section-label">Countries</div>
+              <div className="section-label">Country</div>
               <p className="detail-note">{doc.country_text}</p>
             </>
           )}

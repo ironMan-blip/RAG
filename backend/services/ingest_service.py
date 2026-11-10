@@ -22,7 +22,7 @@ def list_uploads() -> list[dict]:
 
 
 def _is_unchanged(cur, file_name: str, file_hash: str, source_id: str, session_id: Optional[str],
-                  country: Optional[list[str]]) -> bool:
+                  country: Optional[str]) -> bool:
     # A re-upload with other countries is a change, so it replaces the saved document
     cur.execute(
         """SELECT 1 FROM documents
@@ -125,7 +125,7 @@ def _process_in_background(job: upload_jobs.UploadJob):
 
 
 def start_upload(file_name: str, content: bytes, content_type: str, source: str,
-                 country: Optional[list[str]] = None) -> Optional[dict]:
+                 country: Optional[str] = None) -> Optional[dict]:
     """Process an upload in the background; its progress is listed by upload_jobs.list_jobs until it finishes.
 
     Returns None for a file already saved unchanged. Raises UploadInProgress if that filename is uploading.

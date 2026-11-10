@@ -1,4 +1,5 @@
 """Countries a tools document can be tagged with; stored in documents.country."""
+from typing import Optional
 
 NOT_APPLICABLE = 'N/A'
 
@@ -34,14 +35,10 @@ COUNTRY_OPTIONS = [NOT_APPLICABLE, *COUNTRIES]
 _ALLOWED = set(COUNTRY_OPTIONS)
 
 
-def validate_countries(countries: list[str]) -> list[str]:
-    """Deduplicated selection, or ValueError: at least one known country, or N/A on its own."""
-    selected = list(dict.fromkeys(countries))
-    if not selected:
-        raise ValueError("Select at least one country, or N/A.")
-    unknown = [c for c in selected if c not in _ALLOWED]
-    if unknown:
-        raise ValueError(f"Unknown country: {unknown[0]}")
-    if NOT_APPLICABLE in selected and len(selected) > 1:
-        raise ValueError("N/A can't be combined with countries.")
-    return selected
+def validate_country(country: Optional[str]) -> str:
+    """The country, or ValueError unless it is one known country or N/A."""
+    if not country:
+        raise ValueError("Select a country, or N/A.")
+    if country not in _ALLOWED:
+        raise ValueError(f"Unknown country: {country}")
+    return country

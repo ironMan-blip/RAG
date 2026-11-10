@@ -21,8 +21,8 @@ _PROFILE_FIELDS = ("year", "grade", "subject", "topic", "subtopic")
 
 # Phase 1: top 10 documents by how many profile fields match their metadata (case-insensitive substring
 #          either way, so "8" matches "Grade 8"); if none match, every document in scope.
-# Country: of those documents, only ones tagged with their most common country (ties: the best-ranked
-#          document's) are kept, plus N/A and untagged ones, so excerpts never mix countries.
+# Country: of those documents, only the most common country's (ties: the best-ranked document's) are kept,
+#          plus N/A and untagged ones, so excerpts never mix countries.
 # Phase 2: every chunk of those documents with cosine similarity >= MIN_SIMILARITY to the query embedding,
 #          most similar first; the MIN_CHUNKS most similar always pass, so a low-scoring query still gets context.
 #
@@ -51,15 +51,15 @@ _CONTEXT_SQL = """
         SELECT d.id, 0, d.country FROM documents d WHERE ({scope}) AND NOT EXISTS (SELECT 1 FROM scored)
     ),
     top_country AS (
-        SELECT c FROM top_docs t, unnest(t.country) c
-        WHERE c <> 'N/A'
-        GROUP BY c
-        ORDER BY count(*) DESC, max(t.score) DESC, min(t.id)
+        SELECT country FROM top_docs
+        WHERE country <> 'N/A'
+        GROUP BY country
+        ORDER BY count(*) DESC, max(score) DESC, min(id)
         LIMIT 1
     ),
     kept_docs AS (
-        SELECT id FROM top_docs t
-        WHERE t.country IS NULL OR 'N/A' = ANY(t.country) OR (SELECT c FROM top_country) = ANY(t.country)
+        SELECT id FROM top_docs
+        WHERE country IS NULL OR country = 'N/A' OR country = (SELECT country FROM top_country)
     ),
     ranked AS (
         SELECT d.filename, c.chunk_text, c.previous_summary,
